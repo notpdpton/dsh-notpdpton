@@ -852,6 +852,24 @@ window.__ModuleLoader__.load({
         const sample = windowPlacement.readGeometry(host)
         if (sample === null) return
         if (!windowPlacement.isStorableRect(sample.rect)) return
+        // The cheap "nothing happened" test runs BEFORE the display query, which is
+        // the only asynchronous, cross-process work in this function. The 1 s poll
+        // exists for a window MOVE (a move fires no renderer event), and moves are
+        // exactly what this comparison catches: while the window sits still, every
+        // poll would otherwise await getScreenDetails() only to discard the result.
+        //
+        // Skipping is safe because the full path's only possible effect on an
+        // unchanged rect is the diagnostic `maximized` flag, which no restore path
+        // reads (planRestore re-derives maximize from the rect itself). The flag can
+        // be set here only when the STORED rect is itself a work-area fill, which
+        // this version never stores — capture takes the maximized branch for a fill.
+        if (
+          saved !== undefined &&
+          saved.maximized === false &&
+          windowPlacement.sameRect(saved.rect, sample.rect)
+        ) {
+          return
+        }
         const areas = await workAreas()
         // The switch is re-read after every await: the user can turn the feature
         // off while getScreenDetails() is pending, and a write after that would

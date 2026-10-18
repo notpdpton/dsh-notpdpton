@@ -204,6 +204,11 @@ is what comes back.
 
 * geometry is sampled on `resize`, on `pagehide`/`beforeunload`, and by a 1 s poll — a
   window **move** fires no renderer event at all, which is what the poll is for;
+* the poll's "nothing changed" test runs **before** `getScreenDetails()`, so a
+  stationary window costs one synchronous rect read per tick and no display query.
+  The comparison catches precisely the moves the poll exists for; skipping the rest
+  is safe because the display list can only affect the diagnostic `maximized` flag,
+  which no restore path reads (`planRestore` re-derives maximize from the rect);
 * capture is suppressed while a restore is placing the window, so the correction
   loop's intermediate rects never reach the store;
 * degenerate samples (smaller than 520x600, or unreadable) are ignored;

@@ -1291,6 +1291,69 @@ await section('7. capture sanity', async () => {
 })
 
 // ===========================================================================
+// 7c. IDLE POLL COST
+//
+//   capture() reads the window rect synchronously, then queried the display list
+//   BEFORE asking whether anything had changed, so the 1 s poll awaited
+//   getScreenDetails() forever on a stationary window. The unchanged test now runs
+//   first. The positive control matters as much as the saving: the poll exists to
+//   catch a MOVE (a move fires no renderer event), so a moved window must still be
+//   captured WITHOUT any resize/pagehide event firing.
+// ===========================================================================
+await section('7c. an idle poll does not query displays; a move still is', async () => {
+  const key = seam.WINDOW_STATE_KEY
+  const local = makeStorage()
+  call('saveState', { rect: { left: 100, top: 80, width: 1280, height: 820 }, dpr: 1, maximized: false, updatedAt: 5 }, local)
+  resetHost({ rect: { left: 100, top: 80, width: 1280, height: 820 } })
+
+  // Count display queries by wrapping the shim's method for this scenario.
+  const original = host.getScreenDetails
+  let queries = 0
+  host.getScreenDetails = async function (...args) {
+    queries++
+    return original.apply(this, args)
+  }
+
+  await withStorages(local, makeStorage([[seam.WINDOW_RESTORED_KEY, '1']]), async () => {
+    // The launch is already marked handled, which is the reload case: the poll is
+    // the ONLY capture mechanism left, so this scenario measures it in isolation.
+    const dispose = call('install', () => ({ rememberWindowGeometry: true }))
+    await tick(300)
+
+    // Park the store on exactly the current geometry, so every poll is a no-op.
+    host.__asked = { left: 100, top: 80, width: 1280, height: 820 }
+    host.__dispatch('resize')
+    await tick(60)
+    // Settle any capture already in flight before taking the baseline, so a late
+    // completion cannot be counted against the idle window.
+    await tick(200)
+    const beforeIdle = queries
+    // Three poll intervals, so at least two ticks land with certainty.
+    await tick(3200)
+    check(
+      'an idle window costs no display query across two poll ticks',
+      queries === beforeIdle,
+      queries - beforeIdle + ' queries in 2.2 s on a stationary window',
+    )
+
+    // Positive control: a MOVE with no resize/pagehide event must still be caught.
+    // The wait must span several poll intervals: waitFor()'s 1.2 s default is only
+    // just longer than the 1 s poll, which is a race on a loaded machine.
+    host.__asked = { left: 640, top: 320, width: 1280, height: 820 }
+    await waitFor(() => call('decodeState', local.__map.get(key))?.rect.left === 640, 5000)
+    const moved = call('decodeState', local.__map.get(key))
+    check(
+      'a move with no renderer event is still captured by the poll',
+      sameRect(moved?.rect, { left: 640, top: 320, width: 1280, height: 820 }),
+      rectText(moved?.rect),
+    )
+    check('the move path does query the display list', queries > beforeIdle, String(queries - beforeIdle))
+    dispose()
+  })
+
+  host.getScreenDetails = original
+})
+// ===========================================================================
 // 7b. CAPTURE CONTINUITY (regression guard)
 //
 //   client.js once called a sameRect() helper that had drifted out of scope from
