@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Window position and size",
+    "description": "Reopen the window where and how you left it. Closed maximized, it reopens at the size from before it was maximized."
+  }
+}

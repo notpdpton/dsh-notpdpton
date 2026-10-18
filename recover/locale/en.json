@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interrupted-session recovery",
+    "description": "Shows a Continue button above the composer when a session did not finish cleanly."
+  }
+}

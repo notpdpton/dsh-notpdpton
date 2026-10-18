@@ -1,0 +1,11 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="18" cy="18" r="11.6" fill="url(#npd-recovery)"/>
+  <path d="M21.1 12.63A6.2 6.2 0 1 1 13.25 14.01" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M15.71 16.07L15.44 11.41L10.8 11.96" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="npd-recovery" x1="18" y1="6.4" x2="18" y2="29.6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AC2FF"/>
+      <stop offset="1" stop-color="#4A65E8"/>
+    </linearGradient>
+  </defs>
+</svg>

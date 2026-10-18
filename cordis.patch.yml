@@ -1,0 +1,22 @@
+# This package is the PACK (不二布丁光子): one card on the Plugins page whose
+# 包含的组件 list is the rows below. The pack itself is NOT a component — it only
+# carries the card's own name and description ("个人专属插件") plus this patch. Each
+# row names a FEATURE PACKAGE, so each feature is its own component with its own
+# on/off switch and its own display text:
+#
+#   dsh-notpdpton-recover -> 异常中断恢复        (host + browser halves)
+#   dsh-notpdpton-window  -> 窗口位置与尺寸记忆   (browser half only)
+#
+# One row per FEATURE, not per file. The browser half of a row is found by taking the
+# row's PACKAGE ROOT, reading its package.json "dsh.client" declaration, and loading
+# the file that package exports as "./client". A row naming a SUBPATH (e.g.
+# dsh-notpdpton/window) never reaches that scan at all: dsh-client-modules requires an
+# exact package specifier there, so the row would mount with no component UI. And one
+# package can contribute at most one browser module, because the module table is keyed
+# by package name and a second active source is a composition error - which is why the
+# components live in their own packages rather than inside the pack.
+- insert:
+    - id: dsh-notpdpton-recover
+      name: 'dsh-notpdpton-recover'
+    - id: dsh-notpdpton-window
+      name: 'dsh-notpdpton-window'

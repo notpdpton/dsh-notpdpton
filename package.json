@@ -1,0 +1,60 @@
+{
+  "name": "dsh-notpdpton",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "不二布丁光子 — 个人专属 DeepSeek Harness 插件",
+  "icon": "./icon.svg",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./index.js": "./index.js",
+    "./package.json": "./package.json",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./recover": "./recover/index.js",
+    "./recover/package.json": "./recover/package.json",
+    "./recover/client": "./recover/client.js",
+    "./recover/icon": "./recover/icon.svg",
+    "./recover/locale/*.json": "./recover/locale/*.json",
+    "./window": "./window/index.js",
+    "./window/package.json": "./window/package.json",
+    "./window/client": "./window/client.js",
+    "./window/icon": "./window/icon.svg",
+    "./window/locale/*.json": "./window/locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "recover/package.json",
+    "recover/index.js",
+    "recover/client.js",
+    "recover/icon.svg",
+    "recover/locale/*.json",
+    "window/package.json",
+    "window/index.js",
+    "window/client.js",
+    "window/icon.svg",
+    "window/locale/*.json"
+  ],
+  "dependencies": {
+    "dsh-notpdpton-recover": "1.0.0",
+    "dsh-notpdpton-window": "1.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
