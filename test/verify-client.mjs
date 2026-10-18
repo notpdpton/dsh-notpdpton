@@ -503,12 +503,59 @@ const pageText = textOf(settingsTree)
 check('the page renders the pack heading', pageText.includes('不二布丁光子'), pageText.slice(0, 40))
 check('the page does not repeat a component title as its heading', !pageText.startsWith('异常中断恢复'), pageText.slice(0, 40))
 
+console.log('\n-- the heading carries the package id and version')
+// The heading states WHICH build the page belongs to, the way the plugin market's
+// own heading pairs its name with the package and the installed version: a
+// screenshot of this page then answers the first question of every bug report.
+const pageId = []
+const pageVersion = []
+const titleRowClasses = []
+walk(settingsTree, (node) => {
+  if (node.props?.className === 'npd-pageId') pageId.push(textOf(node))
+  if (node.props?.className === 'npd-pageVersion') pageVersion.push(textOf(node))
+  if (node.props?.className === 'npd-pageTitleRow') {
+    // The stub keeps a child ARRAY as one child, so flatten one level.
+    const children = (node.children ?? []).flat()
+    titleRowClasses.push(children.map((child) => child?.props?.className))
+  }
+})
+check('the heading shows the package id', pageId.length === 1 && pageId[0] === 'dsh-notpdpton', pageId.join(' | '))
+check('the heading shows a v-prefixed version', pageVersion.length === 1 && /^v\d+\.\d+\.\d+$/.test(pageVersion[0]), pageVersion.join(' | '))
+// Same LINE as the title, and after it: the version belongs to the name, not to a
+// second row of its own.
+check(
+  'id and version share the title row, after the title',
+  titleRowClasses.length === 1 &&
+    JSON.stringify(titleRowClasses[0]) === JSON.stringify(['npd-pageTitle', 'npd-pageId', 'npd-pageVersion']),
+  JSON.stringify(titleRowClasses),
+)
+check('the version carries an explanatory tooltip', t('settings.versionHint').includes('版本'), t('settings.versionHint'))
+
 // Every preference switch must sit inside a block, never loose on the page.
 const looseSwitches = []
 walk(settingsTree, (node) => {
   if (node.type === 'button' && node.props?.role === 'switch' && node.props?.className === 'npd-switch') looseSwitches.push(node)
 })
 check('every switch is inside a subfeature block', looseSwitches.length === 2, String(looseSwitches.length))
+
+console.log('\n-- richer blocks preserve the shared section shell')
+let sharedGroup
+settings.Component({ t, renderSlot: (_name, props) => { sharedGroup = props.Group; return null } })
+check('the page provides the same Group contract', typeof sharedGroup === 'function')
+const customBody = { type: 'div', props: { id: 'regression-custom-body' }, children: ['loading or form content'] }
+const customBlock = sharedGroup({ t: (key) => key, title: 'A richer block', body: customBody })
+const customNodes = []
+walk(customBlock, (node) => customNodes.push(node))
+check('a supplied body remains inside the pack section', customNodes.some((node) => node.props?.id === 'regression-custom-body'))
+check('a supplied body is not mislabelled as an empty group', !customNodes.some((node) => node.props?.className === 'npd-groupEmpty'))
+const footerBlock = sharedGroup({ t: (key) => key, title: 'Loading', footer: customBody })
+const footerNodes = []
+walk(footerBlock, (node) => footerNodes.push(node))
+check('a loading/error footer also suppresses the empty placeholder', !footerNodes.some((node) => node.props?.className === 'npd-groupEmpty'))
+const wideBlock = sharedGroup({ t, title: 'Field', fields: [{ key: 'wide', id: 'wide-control', label: 'Wide', wide: true, control: null }] })
+const wideNodes = []
+walk(wideBlock, (node) => wideNodes.push(node))
+check('wide field hints reach the actual row markup', wideNodes.some((node) => node.props?.className === 'npd-field' && node.props['data-wide'] === 'true'))
 
 console.log(failures === 0 ? '\nOK: client half checks pass' : `\nFAIL: ${failures} failures`)
 process.exit(failures === 0 ? 0 : 1)

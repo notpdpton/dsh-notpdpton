@@ -26,6 +26,16 @@ window.__ModuleLoader__.load({
 
     /** Locale namespace owned by this plugin. */
     const NS = 'notpdpton'
+    /**
+     * The pack this page belongs to, and the version shown beside the page title.
+     *
+     * The browser half cannot read a package.json, so the version is a constant
+     * here. `test/verify-manifest.mjs` pins both to the pack manifest, which turns
+     * a forgotten version bump into a red check instead of a stale number on the
+     * settings page.
+     */
+    const PACKAGE_ID = 'dsh-notpdpton'
+    const PACKAGE_VERSION = '1.1.0'
     /** Projection key registered by this plugin's Host half. */
     const PROJECTION_KEY = 'interruption'
     /** Dock cell id; a fresh id adds an entry beside the shipped todo/goal/queue docks. */
@@ -239,7 +249,17 @@ window.__ModuleLoader__.load({
 
 .npd-page { display: flex; flex-direction: column; gap: 4px; }
 .npd-pageHead { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; }
+/* Title, package id and version share one baseline, the way the market's heading
+   pairs its name with the package and the installed version. */
+.npd-pageTitleRow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .npd-pageTitle { margin: 0; font-size: 15px; font-weight: 600; line-height: 24px; color: var(--dsw-alias-label-primary); }
+.npd-pageId,
+.npd-pageVersion {
+  flex: none; font-size: 12px; line-height: 20px;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+}
+/* A version is a number to compare down a column, not prose. */
+.npd-pageVersion { font-variant-numeric: tabular-nums; }
 .npd-pageDesc { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 /* One block per subfeature, so a preference is always read in the context of the
    feature that owns it. */
@@ -272,6 +292,79 @@ window.__ModuleLoader__.load({
 }
 .npd-switch[aria-checked="true"]::after { transform: translateX(16px); }
 .npd-switch:focus-visible { outline: 1.5px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.npd-switch:disabled { opacity: .45; cursor: default; }
+/* A row whose preference is a VALUE rather than an on/off state. The label column
+   keeps the same metrics as a switch row, so a block that mixes both reads as one
+   list; the control column is sized for a field, not for a switch. */
+.npd-field {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 12px 0; border-bottom: .5px solid var(--dsw-alias-border-l2);
+}
+.npd-field:last-child { border-bottom: 0; }
+.npd-fieldText { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.npd-fieldControl { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* Host-shaped controls: one-line inputs and selects on the layer-2 surface, a
+   1px border, and the brand color for focus. Nothing here may invent a color. */
+.npd-input,
+.npd-select {
+  box-sizing: border-box;
+  height: 30px; padding: 0 10px; min-width: 200px; max-width: 320px;
+  border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: 13px; line-height: 20px;
+}
+.npd-input::placeholder { color: var(--dsw-alias-label-secondary); opacity: .7; }
+.npd-input[data-invalid="true"] { border-color: var(--dsw-alias-state-error-primary); }
+.npd-input:focus-visible,
+.npd-select:focus-visible { outline: 1.5px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.npd-input[type="password"] { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.npd-textarea {
+  box-sizing: border-box;
+  width: 100%; min-height: 60px; padding: 7px 10px; resize: vertical;
+  border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: 12px; line-height: 18px; overflow-wrap: anywhere;
+}
+.npd-textarea:focus-visible { outline: 1.5px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+/* A value that fills the whole row width, for a list rather than a scalar. */
+.npd-field[data-wide="true"] { flex-direction: column; align-items: stretch; gap: 8px; }
+.npd-field[data-wide="true"] .npd-fieldControl { justify-content: flex-start; }
+.npd-field[data-wide="true"] .npd-textarea { max-width: none; }
+/* Segmented choice, used where the options are few and mutually exclusive. */
+.npd-segments {
+  display: inline-flex; padding: 2px; gap: 2px;
+  border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-2);
+}
+.npd-segment {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
+  border: 0; border-radius: calc(var(--dsw-radius-md, 8px) - 2px);
+  background: transparent; color: var(--dsw-alias-label-secondary);
+  font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap;
+}
+.npd-segment[aria-pressed="true"] {
+  background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-bg-base);
+}
+.npd-segment:disabled { opacity: .5; cursor: default; }
+.npd-segment:focus-visible { outline: 1.5px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+/* The footer under a block's rows: live state, warnings, and the result of the
+   last action. Never collects input, so it sits outside the row list. */
+.npd-status {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: .5px solid var(--dsw-alias-border-l2);
+}
+.npd-statusLine { display: flex; gap: 8px; align-items: baseline; font-size: 12px; line-height: 18px; }
+.npd-statusLabel { flex: none; width: 84px; color: var(--dsw-alias-label-secondary); }
+.npd-statusValue { min-width: 0; flex: 1; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.npd-statusValue[data-mono="true"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+.npd-statusNote { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.npd-statusNote[data-tone="error"] { color: var(--dsw-alias-state-error-primary); }
+.npd-statusNote[data-tone="warn"] { color: var(--dsw-alias-state-warn-primary); }
+.npd-statusNote[data-tone="success"] { color: var(--dsw-alias-state-success-primary); }
 `
 
     /** Render the plugin stylesheet as a React element so unmounting removes it. */
@@ -563,18 +656,66 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Draw ONE subfeature block: its heading, then its preference rows.
+     * Draw ONE subfeature block: its heading, then the rows it supplies.
      *
      * The page owns this markup, and hands it to every block through the group
      * slot's owner props (`Group`). That is what keeps two blocks from two
      * different packages looking the same by coincidence instead of by contract:
-     * a block supplies its copy and its switch wiring, never its own chrome.
+     * a block supplies its copy and its controls, never its own chrome.
+     *
+     * Two row kinds exist because the pack has two kinds of preference:
+     *
+     *   - `items` — a preference that is ON or OFF, drawn as a labelled switch;
+     *   - `fields` — a value the user types or picks, drawn as a labelled control
+     *     the block supplies (a `select`, an `input`, a button row). The page
+     *     still owns the row, the label column and the spacing; only the control
+     *     itself comes from the block, styled with the page's own field classes.
+     *
+     * `body` is optional component-owned content for richer forms; the page still
+     * owns the section heading and sibling placement. Switch-only contributors
+     * need not change. `footer` remains available below either form of content.
+     * A body or footer counts as content, so loading/error states never receive
+     * the misleading "no additional settings" placeholder.
      *
      * @param block - `t` bound to the contributing component's namespace, the
-     *   heading and description, and the rows to draw.
+     *   heading and description, the switch rows, the field rows, and the footer.
      * @returns the block element.
      */
-    function renderGroupBlock({ t, title, desc, items }) {
+    function renderGroupBlock({ t, title, desc, items = [], fields = [], body = null, footer = null }) {
+      const rows = [
+        ...items.map((item) =>
+          h('div', { className: 'npd-row', key: item.key }, [
+            h(
+              'div',
+              { className: 'npd-rowText', key: 'text' },
+              h('label', { className: 'npd-rowLabel', htmlFor: item.id, key: 'label' }, item.label),
+              item.desc === undefined ? null : h('span', { className: 'npd-rowDesc', key: 'desc' }, item.desc),
+            ),
+            h('button', {
+              key: 'switch',
+              id: item.id,
+              type: 'button',
+              className: 'npd-switch',
+              role: 'switch',
+              'aria-checked': item.checked,
+              'aria-label': item.label,
+              disabled: item.disabled === true,
+              onClick: () => item.onChange(!item.checked),
+            }),
+          ]),
+        ),
+        ...fields.map((field) =>
+          h('div', { className: 'npd-field', key: field.key, 'data-wide': field.wide === true ? 'true' : undefined }, [
+            h(
+              'div',
+              { className: 'npd-fieldText', key: 'text' },
+              h('label', { className: 'npd-rowLabel', htmlFor: field.id, key: 'label' }, field.label),
+              field.desc === undefined ? null : h('span', { className: 'npd-rowDesc', key: 'desc' }, field.desc),
+            ),
+            h('div', { className: 'npd-fieldControl', key: 'control' }, field.control),
+          ]),
+        ),
+      ]
       return h('section', { className: 'npd-group' }, [
         h('div', { className: 'npd-groupHead', key: 'head' }, [
           h('h3', { className: 'npd-groupTitle', key: 'title' }, title),
@@ -582,28 +723,13 @@ window.__ModuleLoader__.load({
             ? null
             : h('p', { className: 'npd-groupDesc', key: 'desc' }, desc),
         ]),
-        items.length === 0
-          ? h('p', { className: 'npd-groupEmpty', key: 'empty' }, t('group.empty'))
-          : items.map((item) =>
-              h('div', { className: 'npd-row', key: item.key }, [
-                h(
-                  'div',
-                  { className: 'npd-rowText', key: 'text' },
-                  h('label', { className: 'npd-rowLabel', htmlFor: item.id, key: 'label' }, item.label),
-                  h('span', { className: 'npd-rowDesc', key: 'desc' }, item.desc),
-                ),
-                h('button', {
-                  key: 'switch',
-                  id: item.id,
-                  type: 'button',
-                  className: 'npd-switch',
-                  role: 'switch',
-                  'aria-checked': item.checked,
-                  'aria-label': item.label,
-                  onClick: () => item.onChange(!item.checked),
-                }),
-              ]),
-            ),
+        rows.length > 0
+          ? rows
+          : body === null && footer === null
+            ? h('p', { className: 'npd-groupEmpty', key: 'empty' }, t('group.empty') === 'group.empty' ? '—' : t('group.empty'))
+            : null,
+        body,
+        footer,
       ])
     }
 
@@ -651,7 +777,18 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'npd-page' }, [
         h(Styles, { key: 'styles' }),
         h('div', { className: 'npd-pageHead', key: 'head' }, [
-          h('h2', { className: 'npd-pageTitle', key: 'title' }, t('settings.title')),
+          // Title, then the package id and version on the same line: a screenshot
+          // of this page then carries the two facts a bug report needs, exactly
+          // as the plugin market's own heading does.
+          h('div', { className: 'npd-pageTitleRow', key: 'titleRow' }, [
+            h('h2', { className: 'npd-pageTitle', key: 'title' }, t('settings.title')),
+            h('span', { className: 'npd-pageId', key: 'id' }, PACKAGE_ID),
+            h(
+              'span',
+              { className: 'npd-pageVersion', title: t('settings.versionHint'), key: 'version' },
+              `v${PACKAGE_VERSION}`,
+            ),
+          ]),
           h('p', { className: 'npd-pageDesc', key: 'desc' }, t('settings.description')),
         ]),
         // Keyed by nothing: the outlet is a single persistent child of the page,
@@ -700,6 +837,7 @@ window.__ModuleLoader__.load({
                 'detail.errorMessage': '错误信息',
                 'detail.none': '无',
                 'settings.title': '不二布丁光子',
+                'settings.versionHint': '插件版本 — 反馈问题时请附上',
                 'settings.description': '插件的启用状态在「插件」页控制，这里只放各子功能的设置。',
                 'group.interruptedRecovery': '异常中断恢复',
                 'group.interruptedRecovery.desc': '会话非正常结束时，在输入框上方显示「继续」按钮。',
@@ -737,6 +875,7 @@ window.__ModuleLoader__.load({
                 'detail.errorMessage': 'Error message',
                 'detail.none': 'none',
                 'settings.title': 'Notpdpton Photon',
+                'settings.versionHint': 'Plugin version — include it when reporting an issue',
                 'settings.description':
                   'Enabling the plugin is handled on the Plugins page; this page holds each subfeature’s settings.',
                 'group.interruptedRecovery': 'Interrupted-session recovery',

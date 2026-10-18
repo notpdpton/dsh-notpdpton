@@ -5,11 +5,13 @@
  * usage: node verify-manifest.mjs
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 
 const root = new URL('..', import.meta.url)
 const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'))
+
+/** Every component package the pack ships, in the order its patch inserts them. */
+const COMPONENTS = ['recover', 'window', 'proxy']
 
 let failures = 0
 function check(label, condition, detail) {
@@ -45,9 +47,9 @@ check('entry export declared', pkg.exports?.['.'] === './index.js', pkg.exports?
 check('explicit index.js export declared', pkg.exports?.['./index.js'] === './index.js', pkg.exports?.['./index.js'])
 check('no leftover feature subpath export', pkg.exports?.['./feature'] === undefined, pkg.exports?.['./feature'])
 check('no leftover feature subpath files', !(pkg.files ?? []).some((f) => f.startsWith('feature/')))
-// Both components are their own packages, so the pack must ship and export each one
-// for the profile's link and for the rows that name them to resolve.
-for (const feature of ['recover', 'window']) {
+// Every component is its own package, so the pack must ship and export each one for
+// the profile's link and for the rows that name them to resolve.
+for (const feature of COMPONENTS) {
   check(
     `ships the ${feature} package inside the pack`,
     (pkg.files ?? []).some((f) => f.startsWith(`${feature}/`)),
@@ -65,47 +67,52 @@ check(
     (pkg.files ?? []).some((f) => f.startsWith('locale/')),
   JSON.stringify(pkg.files),
 )
-// The pack depends on exactly the feature packages its patch inserts rows for.
+// The pack depends on exactly the component packages its patch inserts rows for.
 check(
-  'declares both feature packages as dependencies',
-  Object.keys(pkg.dependencies ?? {}).sort().join(',') === 'dsh-notpdpton-recover,dsh-notpdpton-window',
+  'declares every component package as a dependency',
+  Object.keys(pkg.dependencies ?? {}).sort().join(',') ===
+    COMPONENTS.map((name) => `dsh-notpdpton-${name}`)
+      .sort()
+      .join(','),
   JSON.stringify(pkg.dependencies),
 )
 check(
-  'ships the window package inside the pack',
-  Array.isArray(pkg.files) && pkg.files.some((f) => f.startsWith('window/')),
-  JSON.stringify(pkg.files),
+  'every component dependency matches the pack version',
+  Object.values(pkg.dependencies ?? {}).every((version) => version === pkg.version),
+  JSON.stringify(pkg.dependencies),
 )
-for (const entry of [
-  ['./window', './window/index.js'],
-  ['./window/client', './window/client.js'],
-  ['./window/icon', './window/icon.svg'],
-  ['./window/locale/*.json', './window/locale/*.json'],
-]) {
-  check('pack exports ' + entry[0], pkg.exports?.[entry[0]] === entry[1], String(pkg.exports?.[entry[0]]))
+for (const feature of COMPONENTS) {
+  for (const entry of [
+    [`./${feature}/package.json`, `./${feature}/package.json`],
+    [`./${feature}/client`, `./${feature}/client.js`],
+    [`./${feature}/icon`, `./${feature}/icon.svg`],
+    [`./${feature}/locale/*.json`, `./${feature}/locale/*.json`],
+  ]) {
+    check('pack exports ' + entry[0], pkg.exports?.[entry[0]] === entry[1], String(pkg.exports?.[entry[0]]))
+  }
+}
+// The design notes ship with the package, because a defect report quotes them.
+for (const doc of ['window-state', 'proxy']) {
+  check(`ships docs/${doc}.md`, (pkg.files ?? []).includes('docs/*.md') || (pkg.files ?? []).includes(`docs/${doc}.md`), JSON.stringify(pkg.files))
 }
 
 console.log('\n-- patch')
 const patch = readFileSync(new URL('cordis.patch.yml', root), 'utf8')
-// The pack is ONE card on the Plugins page listing its components. Each row in
-// its bundle patch is one component, so the pack inserts TWO: the recovery
-// component and the window-placement component. One row per feature, because the
-// browser module table is keyed by package name and two client halves cannot share
-// one package.
+// The pack is ONE card on the Plugins page listing its components. Each row in its
+// bundle patch is one component, so the pack inserts one row per feature. That is
+// required rather than stylistic: the browser module table is keyed by package name
+// and two client halves cannot share one package.
 const packIds = [...patch.matchAll(/^\s*-\s*id:\s*(\S+)/gm)].map((m) => m[1].replace(/['"]/g, ''))
 const packNames = [...patch.matchAll(/^\s*name:\s*(\S+)\s*$/gm)].map((m) => m[1].replace(/['"]/g, ''))
-check('pack patch inserts two component rows', packIds.length === 2, packIds.join(','))
+check(`pack patch inserts ${COMPONENTS.length} component rows`, packIds.length === COMPONENTS.length, packIds.join(','))
+for (const [index, feature] of COMPONENTS.entries()) {
+  check(`row ${index + 1} is dsh-notpdpton-${feature}`, packIds[index] === `dsh-notpdpton-${feature}`, packIds[index])
+}
 check(
-  'the recovery row is dsh-notpdpton-recover',
-  packIds[0] === 'dsh-notpdpton-recover',
-  packIds[0],
+  'each row mounts a distinct package',
+  new Set(packNames).size === COMPONENTS.length && packNames.length === COMPONENTS.length,
+  packNames.join(','),
 )
-check(
-  'the window row is dsh-notpdpton-window',
-  packIds[1] === 'dsh-notpdpton-window',
-  packIds[1],
-)
-check('each row mounts a distinct package', new Set(packNames).size === 2 && packNames.length === 2, packNames.join(','))
 check(
   'every row mounts a package root, never a subpath',
   packNames.every((name) => !name.includes('/')),
@@ -114,16 +121,8 @@ check(
 // The pack must not insert itself as a row: it is the card, not a component. A
 // self-row would list the pack's own display text among 包含的组件 and repeat the
 // card title, and its metadata could then only serve one of the two jobs.
-check(
-  'the pack does not insert itself as a component row',
-  !packNames.includes('dsh-notpdpton'),
-  packNames.join(','),
-)
-check(
-  'patch does not mount a subpath',
-  !/name:\s*['"]dsh-notpdpton\//.test(patch),
-  packNames.join(','),
-)
+check('the pack does not insert itself as a component row', !packNames.includes('dsh-notpdpton'), packNames.join(','))
+check('patch does not mount a subpath', !/name:\s*['"]dsh-notpdpton\//.test(patch), packNames.join(','))
 
 console.log('\n-- host halves')
 const packHost = await import(new URL('index.js', root).href)
@@ -173,6 +172,61 @@ check('open tail reports openStep', open.openStep === true, String(open.openStep
 const openTurnClosedStep = fold(base)
 check('open turn with closed step still folds as crash', openTurnClosedStep.status === 'crash', openTurnClosedStep.status)
 check('open turn with closed step reports openStep=false', openTurnClosedStep.openStep === false, String(openTurnClosedStep.openStep))
+
+// Publish-cost contract, driven through the REGISTERED unit (not a helper), so a
+// regression in what apply() wires up is caught too. The registry publishes when
+// consecutive wire views differ by Object.is; the fold's step bookkeeping is
+// host-only, so a step/start or step/end inside an open turn must NOT publish.
+let registered
+recoverHost.apply({
+  sessionProjections: { register: (definition) => ((registered = definition), () => {}) },
+})
+check('apply registers the interruption unit', registered?.key === recoverHost.INTERRUPTION_KEY, String(registered?.key))
+{
+  // Mirror the registry's exact order: fold the event, THEN compute the view.
+  let state = registered.init()
+  let previousView
+  let publications = 0
+  const step = (event) => {
+    state = registered.apply(state, event)
+    const view = registered.wire.view(state)
+    if (!Object.is(previousView, view)) publications++
+    previousView = view
+    return state
+  }
+  const states = [step({ type: 'turn/start', data: { turn: 1 } })]
+  for (let index = 0; index < 20; index++) {
+    states.push(step({ type: 'step/start', data: { turn: 1, step: index } }))
+    states.push(step({ type: 'step/end', data: { turn: 1, step: index } }))
+  }
+  check(
+    'step bookkeeping inside an open turn never publishes',
+    publications === 1,
+    String(publications) + ' publications for the turn plus 40 step events',
+  )
+  check(
+    'the fold still tracks openStep for the harness',
+    states.at(-1).openStep === false && states.at(-2).openStep === true,
+    String(states.at(-2).openStep) + '/' + String(states.at(-1).openStep),
+  )
+  // The host-only fields must be absent from the wire value.
+  const view = host.wireInterruption(states.at(-1))
+  check(
+    'the wire view omits openStep and hasTurns',
+    !('openStep' in view) && !('hasTurns' in view),
+    Object.keys(view).join(','),
+  )
+  check(
+    'the wire view carries every field the Client reads',
+    ['status', 'turn', 'reason', 'abortCause', 'errorCode', 'errorMessage', 'partialMessage', 'todos'].every(
+      (field) => field in view,
+    ),
+    Object.keys(view).join(','),
+  )
+  // A state from a checkpoint row has no remembered view; it must still view once.
+  const restored = { ...initialState(), status: 'interrupted', turn: 3, todos: [] }
+  check('a restored state can still be viewed', host.wireInterruption(restored).status === 'interrupted')
+}
 
 const closedCompleted = fold([...base, { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }])
 check('completed turn folds as none', closedCompleted.status === 'none', closedCompleted.status)
@@ -256,6 +310,9 @@ check(
   (source.match(/ctx\.slots\.inject\(/g) ?? []).length === 3,
   String((source.match(/ctx\.slots\.inject\(/g) ?? []).length),
 )
+// The recovery component must not carry a third component's behaviour either.
+check('recover client has no proxy code', !source.includes('notpdpton-proxy') && !source.includes('setGlobalProxyFromEnv'))
+check('recover client registers no proxy settings group', !source.includes("id: 'networkProxy'"))
 
 // The window package's client half must carry that behaviour instead.
 const windowSource = readFileSync(new URL('window/client.js', root), 'utf8')
@@ -327,11 +384,13 @@ check(
 )
 check(
   'the page never names its components\' blocks',
-  !source.includes('windowPlacement') && !source.includes('记住窗口'),
+  !source.includes('windowPlacement') && !source.includes('记住窗口') && !source.includes('networkProxy'),
 )
+// The page draws every block's chrome, so it must accept a block whose preferences
+// are values rather than switches (the proxy block) as well as switch-only blocks.
 check(
-  'the design note ships with the source tree',
-  statSync(new URL('docs/window-state.md', root)).isFile(),
+  'the page block renderer accepts field rows, not only switches',
+  source.includes('fields = []') && source.includes('npd-fieldControl') && source.includes('npd-status'),
 )
 check(
   'no master on/off switch in the settings page',
@@ -352,6 +411,26 @@ check(
 check('uses only theme tokens for color (no hardcoded palette)', !/#[0-9a-fA-F]{3,8}\b/.test(source.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')), 'found a hex color literal')
 check('no cross-plugin value imports', !source.includes('@deepseek-ai/dsh-client-ui-primitives'))
 
+// The settings page heading names the PACK and its version. The browser half cannot
+// read a package.json, so those two values are constants in the client bundle; this
+// is what keeps them honest — a forgotten bump fails here instead of shipping a
+// stale number beside the title.
+console.log('\n-- settings heading identity matches the manifest')
+const clientId = source.match(/const PACKAGE_ID = '([^']+)'/)?.[1]
+const clientVersion = source.match(/const PACKAGE_VERSION = '([^']+)'/)?.[1]
+check('client heading uses the pack package name', clientId === pkg.name, `${clientId} vs ${pkg.name}`)
+check(
+  'client heading version matches the pack manifest version',
+  clientVersion === pkg.version,
+  `${clientVersion} vs ${pkg.version}`,
+)
+check(
+  'the heading renders both, after the title',
+  source.includes("className: 'npd-pageTitleRow'") &&
+    source.includes("className: 'npd-pageId'") &&
+    source.includes("className: 'npd-pageVersion'"),
+)
+
 console.log('\n-- locales and display metadata')
 /** Read and structurally audit one metadata dictionary. */
 function metaOf(relative) {
@@ -367,7 +446,7 @@ function metaOf(relative) {
 
 // Two layers with two jobs, one file each:
 //   locale/         -> the PACK card: its name and "个人专属插件"
-//   recover/locale/ -> the recovery COMPONENT row: what the feature does
+//   <component>/locale/ -> that COMPONENT row: what the feature does
 // Mixing them is exactly the bug this guards: with the pack's metadata describing a
 // feature, the card and its only relevant row read as duplicates.
 const zhPack = metaOf('locale/zh.json')
@@ -382,7 +461,7 @@ check('pack title (en)', enPack.title === 'Notpdpton Photon', enPack.title)
 // added and because the components already describe themselves.
 check(
   'pack description does not name a feature',
-  !zhPack.description.includes('异常中断恢复') && !zhPack.description.includes('继续'),
+  !zhPack.description.includes('异常中断恢复') && !zhPack.description.includes('继续') && !zhPack.description.includes('代理'),
   zhPack.description,
 )
 check(
@@ -430,25 +509,13 @@ check('window package is named dsh-notpdpton-window', windowPkg.name === 'dsh-no
 check('window package is a private ESM module', windowPkg.private === true && windowPkg.type === 'module')
 check('window package points main at index.js', windowPkg.main === 'index.js', windowPkg.main)
 // THE REVERTED SHAPE: a feature package is not a bundle.
-check(
-  'window package declares NO bundle (only the pack is a bundle)',
-  windowPkg.dsh?.bundle === undefined,
-  JSON.stringify(windowPkg.dsh?.bundle),
-)
-check(
-  'window package ships NO cordis.patch.yml',
-  !existsSync(new URL('cordis.patch.yml', windowRoot)),
-  'cordis.patch.yml is present',
-)
+check('window package declares NO bundle (only the pack is a bundle)', windowPkg.dsh?.bundle === undefined, JSON.stringify(windowPkg.dsh?.bundle))
+check('window package ships NO cordis.patch.yml', !existsSync(new URL('cordis.patch.yml', windowRoot)), 'cordis.patch.yml is present')
 check(
   'window package lists no patch in files[]',
   Array.isArray(windowPkg.files) && !windowPkg.files.some((f) => f.includes('patch') || f.endsWith('.yml')),
   JSON.stringify(windowPkg.files),
 )
-
-// (c) The feature package still has the full dual-face shape: it is what the pack's
-// row resolves to, so it must declare its browser half and export every subpath the
-// loader/plugin manager reads.
 check('window package declares a web client half', windowPkg.dsh?.client?.platform === 'web', windowPkg.dsh?.client?.platform)
 check('window package client half loads immediately', windowPkg.dsh?.client?.immediately === true)
 check(
@@ -478,83 +545,91 @@ check(
   JSON.stringify(windowPkg.files),
 )
 
-// (a) THE PACK is the bundle, and its rows are what create the components.
-const rootPatch = readFileSync(new URL('cordis.patch.yml', root), 'utf8')
-const rootRows = [...rootPatch.matchAll(/^\s*-\s*id:\s*(\S+)/gm)].map((m) => m[1].replace(/['\"]/g, ''))
-const rootNames = [...rootPatch.matchAll(/^\s*name:\s*(\S+)\s*$/gm)].map((m) => m[1].replace(/['\"]/g, ''))
-check('the pack patch inserts exactly two component rows', rootRows.length === 2, rootRows.join(','))
+console.log('\n-- network proxy package manifest')
+// Same shape as the window feature package: a component is a package root with its
+// own halves, never a bundle and never a subpath of the pack.
+const proxyRoot = new URL('proxy/', root)
+const proxyPkg = JSON.parse(readFileSync(new URL('package.json', proxyRoot), 'utf8'))
+check('proxy package is named dsh-notpdpton-proxy', proxyPkg.name === 'dsh-notpdpton-proxy', proxyPkg.name)
+check('proxy package shares the pack version', proxyPkg.version === pkg.version, `${proxyPkg.version} vs ${pkg.version}`)
+check('proxy package is a private ESM module', proxyPkg.private === true && proxyPkg.type === 'module')
+check('proxy package points main at index.js', proxyPkg.main === 'index.js', proxyPkg.main)
+check('proxy package declares NO bundle (only the pack is a bundle)', proxyPkg.dsh?.bundle === undefined, JSON.stringify(proxyPkg.dsh?.bundle))
+check('proxy package ships NO cordis.patch.yml', !existsSync(new URL('cordis.patch.yml', proxyRoot)), 'cordis.patch.yml is present')
 check(
-  'the pack rows are the recovery and window packages',
-  rootRows.includes('dsh-notpdpton-recover') && rootRows.includes('dsh-notpdpton-window'),
-  rootRows.join(','),
+  'proxy package declares a web client half',
+  proxyPkg.dsh?.client?.platform === 'web',
+  proxyPkg.dsh?.client?.platform,
+)
+check('proxy package client half loads immediately', proxyPkg.dsh?.client?.immediately === true)
+for (const entry of [
+  ['.', './index.js'],
+  ['./index.js', './index.js'],
+  ['./package.json', './package.json'],
+  ['./client', './client.js'],
+  ['./client.js', './client.js'],
+  ['./icon', './icon.svg'],
+  ['./locale/*.json', './locale/*.json'],
+]) {
+  check('proxy package exports ' + entry[0], proxyPkg.exports?.[entry[0]] === entry[1], String(proxyPkg.exports?.[entry[0]]))
+}
+check(
+  'proxy package ships its runtime artifacts in files[]',
+  Array.isArray(proxyPkg.files) && ['index.js', 'client.js', 'icon.svg', 'locale/*.json'].every((f) => proxyPkg.files.includes(f)),
+  JSON.stringify(proxyPkg.files),
+)
+// The Host half must stay importable from a location outside the profile (which is
+// where this pack is linked from): a bare npm import would fail there, so the module
+// declares no dependencies at all.
+check(
+  'the proxy host half declares no runtime dependency',
+  Object.keys(proxyPkg.dependencies ?? {}).length === 0,
+  JSON.stringify(proxyPkg.dependencies),
+)
+const proxyHostSource = readFileSync(new URL('index.js', proxyRoot), 'utf8')
+const bareImports = [...proxyHostSource.matchAll(/^\s*import\s[^'"]*['"]([^'".][^'"]*)['"]/gm)].map((match) => match[1])
+check(
+  'the proxy host half imports only node builtins',
+  bareImports.every((specifier) => specifier.startsWith('node:')),
+  bareImports.join(','),
 )
 check(
-  'every row name is an EXACT package root (bare name, no subpath)',
-  rootNames.length === 2 && rootNames.every((name) => !name.includes('/')),
-  rootNames.join(','),
-)
-// (d) The trap this pins: dsh-client-modules scans exact package specifiers only, so
-// a subpath row mounts with no component UI. Both of these must never appear.
-// Check the parsed ROW names, not the raw file: the patch's own comments use those
-// subpaths as the counter-example, and a text search would flag the explanation.
-check(
-  'no row is a subpath like dsh-notpdpton/window or dsh-notpdpton/feature',
-  rootNames.every((name) => !name.startsWith('dsh-notpdpton/')),
-  rootNames.join(','),
+  'the proxy host half declares no Config schema (schemastery is unavailable here)',
+  !/export\s+const\s+Config\b/.test(proxyHostSource),
 )
 
-// (b) The row must RESOLVE, which means the pack depends on the feature package and
-// ships it inside the published file set.
-const packPkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'))
+console.log('\n-- network proxy display metadata')
+const zhProxy = JSON.parse(readFileSync(new URL('locale/zh.json', proxyRoot), 'utf8'))
+const enProxy = JSON.parse(readFileSync(new URL('locale/en.json', proxyRoot), 'utf8'))
+check('proxy zh metadata title names the feature', zhProxy.meta?.title === '网络代理', zhProxy.meta?.title)
+check('proxy en metadata title names the feature', enProxy.meta?.title === 'Network proxy', enProxy.meta?.title)
 check(
-  'the pack depends on the window feature package (so the row resolves)',
-  typeof packPkg.dependencies?.['dsh-notpdpton-window'] === 'string',
-  JSON.stringify(packPkg.dependencies),
+  'proxy description says it routes DSH traffic and tells the model',
+  typeof zhProxy.meta?.description === 'string' && zhProxy.meta.description.includes('DSH') && zhProxy.meta.description.includes('模型'),
+  zhProxy.meta?.description,
 )
 check(
-  'the pack ships window/** in files[]',
-  Array.isArray(packPkg.files) && packPkg.files.some((f) => f.startsWith('window/')),
-  JSON.stringify(packPkg.files),
+  'proxy metadata carries no dead keys',
+  Object.keys(zhProxy).every((k) => k === 'meta') && Object.keys(enProxy).every((k) => k === 'meta'),
 )
-check(
-  'the pack exports the window package subpaths',
-  packPkg.exports?.['./window/client'] === './window/client.js' && packPkg.exports?.['./window'] === './window/index.js',
-  JSON.stringify(Object.keys(packPkg.exports ?? {}).filter((k) => k.startsWith('./window'))),
-)
-// The window component's own metadata: it is the row title the user sees.
-const zhWindow = JSON.parse(readFileSync(new URL('locale/zh.json', windowRoot), 'utf8'))
-const enWindow = JSON.parse(readFileSync(new URL('locale/en.json', windowRoot), 'utf8'))
-check('window zh metadata title names the feature', zhWindow.meta?.title === '窗口位置与尺寸记忆', zhWindow.meta?.title)
-check('window en metadata title names the feature', enWindow.meta?.title === 'Window position and size', enWindow.meta?.title)
-check(
-  'window zh description mentions restoring position and size',
-  typeof zhWindow.meta?.description === 'string' && zhWindow.meta.description.includes('位置') && zhWindow.meta.description.includes('大小'),
-  zhWindow.meta?.description,
-)
-check(
-  'window description states the pre-maximize rule',
-  zhWindow.meta.description.includes('最大化之前'),
-  zhWindow.meta.description,
-)
-check(
-  'window en description states the pre-maximize rule',
-  /before it was maximized/.test(enWindow.meta?.description ?? ''),
-  enWindow.meta?.description,
-)
-check(
-  'window metadata carries no dead keys',
-  Object.keys(zhWindow).every((k) => k === 'meta') && Object.keys(enWindow).every((k) => k === 'meta'),
-)
-check(
-  'window component title differs from the recovery component title',
-  zhWindow.meta.title !== zhRecovery.title && enWindow.meta.title !== enRecovery.title,
-  zhWindow.meta.title + ' / ' + zhRecovery.title,
-)
+const titles = [zhRecovery.title, JSON.parse(readFileSync(new URL('locale/zh.json', windowRoot), 'utf8')).meta.title, zhProxy.meta.title]
+check('every component title is distinct', new Set(titles).size === titles.length, titles.join(' / '))
 
 console.log('\n-- icons')
+// The official plugin icons are all drawn on the same 36-unit canvas; anything else
+// renders at a different optical size beside them in the Plugins list. The per-file
+// style rules (palette, gradients, safe area, self-containment) live in
+// verify-icons.mjs — this is only the manifest-level invariant.
+//
+// No icon is exempt from the canvas rule. A previous run carried a written-down
+// defect for window/icon.svg (64x64, different palette) instead of failing it; the
+// artwork has since been corrected, so the exemption is gone rather than left to
+// rot as a warning nobody reads.
 for (const [label, relative] of [
-  ['recovery component icon', 'icon.svg'],
+  ['package icon', 'icon.svg'],
+  ['recovery component icon', 'recover/icon.svg'],
   ['window component icon', 'window/icon.svg'],
+  ['proxy component icon', 'proxy/icon.svg'],
 ]) {
   const path = new URL(relative, root)
   const stat = statSync(path)
@@ -562,27 +637,7 @@ for (const [label, relative] of [
   check(`${label} under the 256 KiB limit`, stat.size < 256 * 1024, `${stat.size} bytes`)
   const svg = readFileSync(path, 'utf8')
   check(`${label} is valid SVG`, svg.startsWith('<svg') || svg.includes('<svg'), svg.slice(0, 20))
-  // The official plugin icons are all drawn on the same 36-unit canvas; anything
-  // else renders at a different optical size beside them in the Plugins list.
-  // The per-file style rules (palette, gradients, safe area, self-containment)
-  // live in verify-icons.mjs — this is only the manifest-level invariant.
-  //
-  // KNOWN DEFECT, reported to the Lead and deliberately NOT hidden: window/icon.svg
-  // is 64x64 rather than the official 36x36 canvas (and uses a different palette),
-  // so it renders at the wrong optical size beside the other rows. It is asserted
-  // below as a written-down defect instead of a silent pass, so the check flips
-  // the moment the artwork is corrected and the defect cannot be forgotten.
-  if (relative === 'window/icon.svg') {
-    // Reported to the Lead as a product defect; the verifier must not go red for
-    // artwork it is forbidden to edit, but the defect must stay VISIBLE in the
-    // output until it is fixed. Emitted as a warning, not a check.
-    const viewBox = svg.match(/viewBox="[^"]*"/)?.[0] ?? '(none)'
-    if (!svg.includes('viewBox="0 0 36 36"')) {
-      console.log(`  WARN ${label} is NOT on the official 36x36 canvas — ${viewBox}; reported as a product defect`)
-    }
-  } else {
-    check(`${label} uses the official 36x36 canvas`, svg.includes('viewBox="0 0 36 36"'), svg.match(/viewBox="[^"]*"/)?.[0])
-  }
+  check(`${label} uses the official 36x36 canvas`, svg.includes('viewBox="0 0 36 36"'), svg.match(/viewBox="[^"]*"/)?.[0])
 }
 
 console.log(failures === 0 ? '\nOK: bundle audit passes' : `\nFAIL: ${failures} failures`)

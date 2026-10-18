@@ -18,7 +18,9 @@ import { createRequire } from 'node:module'
 // Every package the profile mounts or links: the pack itself (a bundle, no
 // component) and each component package its patch inserts a row for.
 const specifiers = process.argv.slice(2)
-if (specifiers.length === 0) specifiers.push('dsh-notpdpton', 'dsh-notpdpton-recover', 'dsh-notpdpton-window')
+if (specifiers.length === 0) {
+  specifiers.push('dsh-notpdpton', 'dsh-notpdpton-recover', 'dsh-notpdpton-window', 'dsh-notpdpton-proxy')
+}
 const require = createRequire('file:///C:/Users/notpdpton/.dsh/profiles/desktop/')
 
 let failures = 0

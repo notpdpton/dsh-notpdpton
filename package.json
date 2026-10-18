@@ -1,6 +1,6 @@
 {
   "name": "dsh-notpdpton",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "不二布丁光子 — 个人专属 DeepSeek Harness 插件",
@@ -27,7 +27,12 @@
     "./window/package.json": "./window/package.json",
     "./window/client": "./window/client.js",
     "./window/icon": "./window/icon.svg",
-    "./window/locale/*.json": "./window/locale/*.json"
+    "./window/locale/*.json": "./window/locale/*.json",
+    "./proxy": "./proxy/index.js",
+    "./proxy/package.json": "./proxy/package.json",
+    "./proxy/client": "./proxy/client.js",
+    "./proxy/icon": "./proxy/icon.svg",
+    "./proxy/locale/*.json": "./proxy/locale/*.json"
   },
   "files": [
     "index.js",
@@ -43,11 +48,18 @@
     "window/index.js",
     "window/client.js",
     "window/icon.svg",
-    "window/locale/*.json"
+    "window/locale/*.json",
+    "proxy/package.json",
+    "proxy/index.js",
+    "proxy/client.js",
+    "proxy/icon.svg",
+    "proxy/locale/*.json",
+    "docs/*.md"
   ],
   "dependencies": {
-    "dsh-notpdpton-recover": "1.0.0",
-    "dsh-notpdpton-window": "1.0.0"
+    "dsh-notpdpton-proxy": "1.1.0",
+    "dsh-notpdpton-recover": "1.1.0",
+    "dsh-notpdpton-window": "1.1.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5"

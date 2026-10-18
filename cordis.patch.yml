@@ -6,6 +6,7 @@
 #
 #   dsh-notpdpton-recover -> 异常中断恢复        (host + browser halves)
 #   dsh-notpdpton-window  -> 窗口位置与尺寸记忆   (browser half only)
+#   dsh-notpdpton-proxy   -> 网络代理            (host + browser halves)
 #
 # One row per FEATURE, not per file. The browser half of a row is found by taking the
 # row's PACKAGE ROOT, reading its package.json "dsh.client" declaration, and loading
@@ -20,3 +21,5 @@
       name: 'dsh-notpdpton-recover'
     - id: dsh-notpdpton-window
       name: 'dsh-notpdpton-window'
+    - id: dsh-notpdpton-proxy
+      name: 'dsh-notpdpton-proxy'

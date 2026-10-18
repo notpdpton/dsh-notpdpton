@@ -150,6 +150,15 @@ const ICONS = [
     stem: 'window-icon',
     reference: { left: 6.0, top: 7.5, right: 31.0, bottom: 28.25 },
   },
+  {
+    // The network-proxy component. Two opposed arrows inside a rounded frame: the
+    // traffic leaves one way and comes back the other, which is what a proxy does
+    // and what distinguishes it from the recovery and window drawings beside it.
+    label: 'proxy component icon',
+    path: 'proxy/icon.svg',
+    stem: 'proxy-icon',
+    reference: { left: 6.3, top: 6.3, right: 29.7, bottom: 29.7 },
+  },
 ]
 
 /** Allowed distance, in 36-unit space, between the evaluator and the reference. */

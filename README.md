@@ -3,13 +3,14 @@
 个人专属的 DeepSeek Harness 插件包。
 
 本包是一个 bundle：在 DSH 的 Plugins 页面显示为一张卡片「不二布丁光子」，
-卡片下列出两个可独立开关的组件。每个组件都是独立的包，拥有自己的 Host 半边、
+卡片下列出三个可独立开关的组件。每个组件都是独立的包，拥有自己的 Host 半边、
 浏览器半边、图标与多语言文案。
 
 | 组件 | 包名 | 能力 |
 | --- | --- | --- |
 | 异常中断恢复 | `dsh-notpdpton-recover` | 会话非正常结束时，在输入框上方显示提示与「继续」按钮 |
 | 窗口位置与尺寸记忆 | `dsh-notpdpton-window` | 重开应用时，窗口回到关闭时的位置与大小 |
+| 网络代理 | `dsh-notpdpton-proxy` | DSH 自身的网络请求走代理，并把代理信息告知模型 |
 
 ## 组件
 
@@ -30,11 +31,16 @@ Host 半边向 `ctx.sessionProjections` 注册名为 `interruption` 的投影，
 | 槽位 | 内容 |
 | --- | --- |
 | `conversation.input.dock` | 输入框上方的提示条：中断原因、轮次、任务清单，以及「继续」按钮 |
-| `settings.section` | 插件包的设置页「不二布丁光子」 |
+| `settings.section` | 插件包的设置页「不二布丁光子」，标题后标注包名与版本 |
 | `notpdpton.settings.group` | 上述设置页的子槽位，各组件在此各自添加开关块 |
 
 点击「继续」会填入一条接续指令：告知模型上次会话未正常结束、中断于第几轮，
 并附带未完成的任务清单。开关「提示手动停止的会话」关闭后，仅提示非用户主动结束的会话。
+
+设置页标题行在名称之后显示包名与版本（`dsh-notpdpton` · `v1.1.0`），与插件市场
+标题的写法一致，便于反馈问题时截图即带上版本。浏览器半边读不到 `package.json`，
+版本是 `recover/client.js` 中的常量，由 `test/verify-manifest.mjs` 与包清单比对，
+忘记升版本会让校验变红。
 
 ### 窗口位置与尺寸记忆
 
@@ -54,9 +60,32 @@ bounds 创建，未暴露 geometry IPC，Host 半边无法触及）。
 循环：以测量值作为起点，按残差迭代请求，直至收敛或达到上限。设计细节与实测数据见
 [`docs/window-state.md`](docs/window-state.md)。
 
+### 网络代理
+
+Host 侧功能。生效通道是 `node:http.setGlobalProxyFromEnv()`，它同时覆盖两条出站栈：
+undici 的全局 dispatcher（`fetch`，即模型 API、`web_fetch`、HTTP MCP）与
+`http(s).globalAgent`（自己构造请求的 SDK）。
+
+| 能力 | 说明 |
+| --- | --- |
+| 代理来源 | 自动 / 系统代理 / 自定义 / 环境变量 / 直连，五种取值 |
+| 协议 | `http://`、`https://`、`socks5://`（实验特性） |
+| 认证 | 用户名 + 密码；密码存入 DSH 凭据库，不写配置文件、不进进程环境变量 |
+| 排除 | 自定义跳过列表；本机回环地址始终直连，不可关闭 |
+| 告知模型 | 启用后把代理写进提示词，并在 shell 里注入 `DSH_PROXY_URL` 等变量 |
+
+传给 `setGlobalProxyFromEnv()` 的是一个**合成环境对象**而非 `process.env`：
+密码因此从不进入进程环境，也就不会被 shell 工具的子进程继承。
+
+设置存在 profile 目录下的 `notpdpton-proxy.json`，由设置页的「网络代理」块管理，
+保存即时生效，无需重启。配置区顶部显示当前已应用状态，来源和地址按需展开；
+认证、AI 与命令使用、高级设置分组收纳。修改统一通过「保存并应用」提交，
+「测试已保存配置」不会把未保存的输入当作生效配置。
+设计细节、覆盖范围与限制见 [`proxy.md`](<docs/proxy.md>)。
+
 ## 安装
 
-将三个包链接到 DSH profile，并把**包本身**加入 bundle 列表：
+将四个包链接到 DSH profile，并把**包本身**加入 bundle 列表：
 
 ```jsonc
 // <profile>/package.json
@@ -64,7 +93,8 @@ bounds 创建，未暴露 geometry IPC，Host 半边无法触及）。
   "dependencies": {
     "dsh-notpdpton": "link:../dsh-notpdpton",
     "dsh-notpdpton-recover": "link:../dsh-notpdpton/recover",
-    "dsh-notpdpton-window": "link:../dsh-notpdpton/window"
+    "dsh-notpdpton-window": "link:../dsh-notpdpton/window",
+    "dsh-notpdpton-proxy": "link:../dsh-notpdpton/proxy"
   },
   "dsh": {
     "profile": {
@@ -77,7 +107,7 @@ bounds 创建，未暴露 geometry IPC，Host 半边无法触及）。
 }
 ```
 
-两个组件包不带 patch，也不进入 bundle 列表，由包的 `cordis.patch.yml` 逐行插入：
+三个组件包不带 patch，也不进入 bundle 列表，由包的 `cordis.patch.yml` 逐行插入：
 
 ```yaml
 - insert:
@@ -85,6 +115,8 @@ bounds 创建，未暴露 geometry IPC，Host 半边无法触及）。
       name: 'dsh-notpdpton-recover'
     - id: dsh-notpdpton-window
       name: 'dsh-notpdpton-window'
+    - id: dsh-notpdpton-proxy
+      name: 'dsh-notpdpton-proxy'
 ```
 
 ## 目录结构
@@ -92,12 +124,13 @@ bounds 创建，未暴露 geometry IPC，Host 半边无法触及）。
 ```
 dsh-notpdpton/
 ├── index.js             Host 半边（包本身不注册能力）
-├── cordis.patch.yml     插入两个组件的 Loader patch
+├── cordis.patch.yml     插入三个组件的 Loader patch
 ├── package.json
 ├── icon.svg             Plugins 页面的卡片图标
 ├── locale/              卡片标题与描述
 ├── docs/
-│   └── window-state.md  窗口记忆功能的设计文档
+│   ├── window-state.md  窗口记忆功能的设计文档
+│   └── proxy.md         网络代理功能的设计文档
 ├── recover/             dsh-notpdpton-recover
 │   ├── index.js         Host 半边：interruption 投影
 │   ├── client.js        浏览器半边：提示条与设置页
@@ -105,6 +138,10 @@ dsh-notpdpton/
 ├── window/              dsh-notpdpton-window
 │   ├── index.js         Host 半边
 │   ├── client.js        浏览器半边：测量、放置、持久化
+│   └── locale/
+├── proxy/               dsh-notpdpton-proxy
+│   ├── index.js         Host 半边：策略解析、安装、提示词、RPC
+│   ├── client.js        浏览器半边：设置页的「网络代理」块
 │   └── locale/
 └── test/                离线验证脚本
 ```
@@ -128,6 +165,12 @@ node verify-client.mjs            # 槽位注册、词典、渲染文案
 node verify-layout.mjs            # 提示条布局规则
 node verify-continue.mjs          # 「继续」动作与子功能开关
 node verify-window-state.mjs      # 窗口放置：测量、修正循环、持久化、最大化
+
+# 网络代理
+node verify-proxy.mjs             # 解析、脱敏、提示词、真实路由、持久化、设置块
+node verify-proxy-ui.mjs          # 设置表单的状态转换（草稿、保存、凭据、探针）
+node verify-proxy-route.mjs       # 宿主路由与密码通道的端到端行为
+node watch-proxy.mjs [port]       # 起一个会打印每次请求的假代理，用于手动联调
 
 # 会话判定
 node verify-fold.mjs              # interruption 投影（对真实会话日志，只读）
