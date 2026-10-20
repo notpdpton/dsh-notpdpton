@@ -68,17 +68,30 @@ check(
   JSON.stringify(pkg.files),
 )
 // The pack depends on exactly the component packages its patch inserts rows for.
+// Each one is a repository-relative `file:` dependency, not a registry version:
+// these packages are private and have no npm release, so a Git install must carry
+// them inside the fetched repository instead of asking a registry for them.
+const componentDependencyNames = COMPONENTS.map((name) => `dsh-notpdpton-${name}`).sort()
 check(
   'declares every component package as a dependency',
-  Object.keys(pkg.dependencies ?? {}).sort().join(',') ===
-    COMPONENTS.map((name) => `dsh-notpdpton-${name}`)
-      .sort()
-      .join(','),
+  Object.keys(pkg.dependencies ?? {}).sort().join(',') === componentDependencyNames.join(','),
   JSON.stringify(pkg.dependencies),
 )
 check(
-  'every component dependency matches the pack version',
-  Object.values(pkg.dependencies ?? {}).every((version) => version === pkg.version),
+  'every component dependency is a repository-relative file: path',
+  COMPONENTS.every((name) => pkg.dependencies?.[`dsh-notpdpton-${name}`] === `file:./${name}`),
+  JSON.stringify(pkg.dependencies),
+)
+check(
+  'every component dependency points at an in-repo package',
+  COMPONENTS.every((name) => existsSync(new URL(`${name}/package.json`, root))),
+  JSON.stringify(pkg.dependencies),
+)
+check(
+  'every component package shares the pack version',
+  COMPONENTS.every(
+    (name) => JSON.parse(readFileSync(new URL(`${name}/package.json`, root), 'utf8')).version === pkg.version,
+  ),
   JSON.stringify(pkg.dependencies),
 )
 for (const feature of COMPONENTS) {

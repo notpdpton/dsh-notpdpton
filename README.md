@@ -86,7 +86,21 @@ undici 的全局 dispatcher（`fetch`，即模型 API、`web_fetch`、HTTP MCP�
 
 ## 安装
 
-将四个包链接到 DSH profile，并把**包本身**加入 bundle 列表：
+### 从 Git 仓库安装
+
+在 DSH 的 Plugins 页选择安装，填入仓库地址：
+
+```text
+https://github.com/notpdpton/dsh-notpdpton
+```
+
+安装器会用 pnpm 拉取仓库，并把 `dsh-notpdpton` 加入当前 profile。根包通过
+仓库内的相对 `file:` 依赖携带三个组件，因此组件不需要先发布到 npm；装好后
+在 bundle 列表中选择 `dsh-notpdpton` 即可。
+
+### 本地开发安装
+
+开发源码时，把仓库和三个组件包链接到 profile，并把**包本身**加入 bundle 列表：
 
 ```jsonc
 // <profile>/package.json
@@ -120,8 +134,8 @@ undici 的全局 dispatcher（`fetch`，即模型 API、`web_fetch`、HTTP MCP�
       name: 'dsh-notpdpton-proxy'
 ```
 
-四个包都不依赖任何第三方 npm 包，也不声明对宿主包的 peer 依赖（包的 `dependencies`
-里只有它自己的三个组件，版本与包同步）：
+四个包都不依赖任何第三方 npm 包，也不声明对宿主包的 peer 依赖（根包的
+`dependencies` 只以 `file:` 指向仓库内的三个组件；三个组件包不声明依赖）：
 
 - Host 半边只 import `node:` 内置模块，插件因此能从 profile 之外的目录直接加载；
 - 浏览器半边只从模块表取 `react`，而 shell 已经 seed 了它；

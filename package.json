@@ -57,9 +57,9 @@
     "docs/*.md"
   ],
   "dependencies": {
-    "dsh-notpdpton-proxy": "1.1.0",
-    "dsh-notpdpton-recover": "1.1.0",
-    "dsh-notpdpton-window": "1.1.0"
+    "dsh-notpdpton-proxy": "file:./proxy",
+    "dsh-notpdpton-recover": "file:./recover",
+    "dsh-notpdpton-window": "file:./window"
   },
   "dsh": {
     "bundle": {
