@@ -259,6 +259,27 @@ check('a direct policy renders no prompt at all', host.renderPrompt(direct, { ex
 check('a disabled component renders no prompt', host.renderPrompt(disabled, { exposeToShell: 'url', authenticated: false }) === '')
 check('the prompt is English', promptUrl.startsWith('Network proxy'))
 
+// A user template replaces the wording but must not be able to invent a proxy state:
+// placeholders are the ONLY facts it can reach, and they come from the live policy.
+const templated = host.renderPrompt(credentialed, { exposeToShell: 'url', authenticated: true, template: 'Proxy: {{proxy}} ({{source}})\nBypass: {{bypass}}' })
+check('a template replaces the built-in wording', !templated.includes('Network proxy'), templated.slice(0, 60))
+check('a template expands {{proxy}} from the live policy', templated.includes('127.0.0.1:7890'))
+check('a template expands {{source}}', templated.includes('custom'))
+check('a template expands {{bypass}}', templated.includes('127.0.0.1'))
+check('a template never carries the password', !/p%40ss|alice:|secret/.test(templated), templated)
+const unknownPlaceholder = host.renderPrompt(credentialed, { template: 'x {{nope}} y' })
+check('an unknown placeholder stays literal so a typo is visible', unknownPlaceholder.includes('{{nope}}'), unknownPlaceholder)
+const blankTemplate = host.renderPrompt(credentialed, { template: '   ' })
+check('a whitespace-only template falls back to the built-in text', blankTemplate.startsWith('Network proxy'), blankTemplate.slice(0, 40))
+check('a template still renders nothing when no proxy is active', host.renderPrompt(direct, { template: 'x {{proxy}}' }) === '')
+const facts = host.promptFacts(credentialed, { exposeToShell: 'url', authenticated: true })
+check('the facts table never exposes a password', !/p%40ss|alice:/.test(JSON.stringify(facts)), JSON.stringify(facts))
+check(
+  'every advertised placeholder is actually substitutable',
+  Object.keys(facts).every((name) => !host.renderPrompt(credentialed, { template: `{{${name}}}` }).includes('{{')),
+  Object.keys(facts).join(','),
+)
+
 // ---------------------------------------------------------------- install env
 
 console.log('\n-- save validation')

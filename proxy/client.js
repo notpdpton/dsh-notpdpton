@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
     const DEFAULTS = {
       enabled: false, mode: 'auto', proxy: '', httpProxy: '', httpsProxy: '',
       noProxy: '', authUser: '', exposeToShell: 'url', promptInjection: true,
-      probeUrl: 'https://www.gstatic.com/generate_204',
+      promptTemplate: '', probeUrl: 'https://www.gstatic.com/generate_204',
     }
     const KEYS = Object.keys(DEFAULTS)
     const MODES = ['auto', 'system', 'custom', 'env', 'direct'].map((value) => ({
@@ -182,11 +182,13 @@ window.__ModuleLoader__.load({
         phase: 'loading', status: undefined, draft: undefined, secret: '',
         credential: { phase: 'loading', configured: false, writable: false },
         credentialPending: false, operation: null, errors: {}, notice: null, probe: null,
+        promptPreview: null,
       }
       let active = false
       let generation = 0
       let readSequence = 0
       let credentialSequence = 0
+      let promptSequence = 0
       const listeners = new Set()
       const controllers = new Set()
       const publish = (patch) => {
@@ -295,7 +297,9 @@ window.__ModuleLoader__.load({
         refresh, readCredential,
         patch(key, value) {
           if (!canAct() || !KEYS.includes(key)) return
-          publish({ draft: { ...state.draft, [key]: value }, errors: {}, notice: null, probe: null })
+          // The preview described the previous draft, so keeping it would show stale
+          // text beside edited settings — the exact confusion this feature prevents.
+          publish({ draft: { ...state.draft, [key]: value }, errors: {}, notice: null, probe: null, promptPreview: null })
         },
         setSecret(value) {
           if (!canAct()) return
@@ -303,7 +307,7 @@ window.__ModuleLoader__.load({
         },
         revert() {
           if (!canAct()) return
-          publish({ draft: { ...state.status.settings }, secret: '', errors: {}, probe: null,
+          publish({ draft: { ...state.status.settings }, secret: '', errors: {}, probe: null, promptPreview: null,
             notice: state.credentialPending ? { tone: 'warn', key: 'auth.pending' } : null })
         },
         async save() {
@@ -330,7 +334,7 @@ window.__ModuleLoader__.load({
             // No success notice on purpose: the commit button going dead IS the receipt.
             // A saved notice only repeats what the footer already says ("matches the
             // saved configuration"), and it pushed the layout around on every save.
-            publish({ status, draft: { ...status.settings }, secret: '', operation: null, credentialPending: false,
+            publish({ status, draft: { ...status.settings }, secret: '', operation: null, credentialPending: false, promptPreview: null,
               credential: secret === '' ? state.credential : { phase: 'ready', configured: true, writable: true },
               notice: null })
             // Re-read the Host state after committing, so the read-only surfaces (the
@@ -387,6 +391,30 @@ window.__ModuleLoader__.load({
             return true
           } catch (error) {
             if (current(token)) publish({ operation: null, probe: { ok: false, error: detail(error) } })
+            return false
+          }
+        },
+        /**
+         * Ask the Host for the exact text it would inject, for the CURRENT draft.
+         *
+         * Deliberately not computed here: the rendering rules (which facts exist, how
+         * a template placeholder expands) live on the Host, and a second copy in the
+         * browser would drift. The page shows what the model will actually receive.
+         */
+        async previewPrompt() {
+          if (!active || state.draft === undefined) return false
+          const token = generation
+          const sequence = ++promptSequence
+          try {
+            const result = remoteValue(await send('prompt', { settings: state.draft }))
+            if (!current(token) || sequence !== promptSequence) return false
+            if (typeof result?.text !== 'string') throw new Error('Invalid prompt preview')
+            publish({ promptPreview: result })
+            return true
+          } catch (error) {
+            if (current(token) && sequence === promptSequence) {
+              publish({ promptPreview: { error: detail(error) } })
+            }
             return false
           }
         },
@@ -484,6 +512,18 @@ window.__ModuleLoader__.load({
 .npdpx-input[aria-invalid="true"], .npdpx-textarea[aria-invalid="true"] { border-color: var(--dsw-alias-state-error-primary); }
 .npdpx-input:disabled, .npdpx-textarea:disabled { opacity: .5; cursor: default; }
 .npdpx-mono { font-family: var(--ds-font-family-code); font-size: 12px; }
+/* ---- prompt preview and template -------------------------------------- */
+/* The preview quotes what the model receives, so it reads as quoted material:
+   monospace, own surface, own scroll instead of growing the page. */
+.npdpx-promptSection { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }
+.npdpx-promptHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.npdpx-preview { display: flex; flex-direction: column; gap: 6px; }
+.npdpx-previewText { margin: 0; padding: 10px 12px; max-height: 220px; overflow: auto; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); font-family: var(--ds-font-family-code); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); }
+.npdpx-textAreaRow { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.npdpx-placeholders { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.npdpx-chip { padding: 2px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: transparent; font-family: var(--ds-font-family-code); font-size: 11px; line-height: 18px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.npdpx-chip:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
+.npdpx-chip:disabled { opacity: .5; cursor: default; }
 .npdpx-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }
 .npdpx-error { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
 .npdpx-warning { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-state-warn-label); overflow-wrap: anywhere; }
@@ -622,6 +662,19 @@ window.__ModuleLoader__.load({
         'auth.partial': '密码已写入凭据库，但代理配置未应用成功。请重试保存。',
         'ai.title': 'AI 与命令使用', 'ai.summary': '提示词与 Shell 分开控制',
         'ai.prompt': '在对话中告知模型', 'ai.promptHint': '仅在代理生效时注入代理信息，提示词不包含密码。',
+        'prompt.preview': '实际注入的内容', 'prompt.refresh': '重新生成预览',
+        'prompt.previewIdle': '展开此区域后会显示当前实际注入的完整提示词。',
+        'prompt.previewInactive': '当前没有生效的代理，因此不会注入任何内容。',
+        'prompt.previewDisabled': '「在对话中告知模型」已关闭，因此不会注入任何内容。',
+        'prompt.previewError': '无法获取预览：',
+        'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
+        'prompt.requiredYes': '必需项（精简预设也不会忽略）',
+        'prompt.requiredNo': '可选项（可能被精简预设忽略）',
+        'prompt.template': '自定义模板', 'prompt.templateHint': '留空则使用内置文案。支持下方占位符；未知占位符会原样保留，便于发现拼写错误。',
+        'prompt.templatePlaceholder': '例如：\n{{proxy}}\n这条代理只覆盖本进程…',
+        'prompt.templatePlaceholderGeneric': '例如：{{proxy}}（占位符需展开预览后才列出）',
+        'prompt.placeholders': '可用占位符：', 'prompt.insertHint': '点击插入到模板末尾',
+        'prompt.reset': '恢复内置文案',
         'shell.label': '提供给 Shell 的代理信息', 'shell.off': '不提供', 'shell.url': '仅地址（推荐）', 'shell.full': '地址与凭据',
         'shell.offHint': '命令环境不提供代理信息；上面的提示词开关独立生效。',
         'shell.urlHint': '命令按需显式使用代理地址。代理要求认证时，命令可能收到 407（代理需要认证）。',
@@ -709,6 +762,19 @@ window.__ModuleLoader__.load({
         'auth.partial': 'The password was stored, but the proxy settings could not be applied. Retry saving.',
         'ai.title': 'AI & command access', 'ai.summary': 'Separate prompt and shell controls',
         'ai.prompt': 'Tell the model in conversation', 'ai.promptHint': 'Inject proxy information only while active. Passwords never enter the prompt.',
+        'prompt.preview': 'What is actually injected', 'prompt.refresh': 'Regenerate preview',
+        'prompt.previewIdle': 'Expand this section to see the exact prompt text currently injected.',
+        'prompt.previewInactive': 'No proxy is active, so nothing is injected.',
+        'prompt.previewDisabled': '“Tell the model in conversation” is off, so nothing is injected.',
+        'prompt.previewError': 'Could not fetch the preview: ',
+        'prompt.previewMeta': '{chars} characters; this entry is {required}.',
+        'prompt.requiredYes': 'required (lean presets cannot drop it)',
+        'prompt.requiredNo': 'optional (lean presets may drop it)',
+        'prompt.template': 'Custom template', 'prompt.templateHint': 'Leave empty to use the built-in wording. Placeholders below are supported; unknown ones stay literal so a typo is visible.',
+        'prompt.templatePlaceholder': 'For example:\n{{proxy}}\nThis proxy covers this process only…',
+        'prompt.templatePlaceholderGeneric': 'For example: {{proxy}} (placeholders appear after the preview loads)',
+        'prompt.placeholders': 'Available placeholders:', 'prompt.insertHint': 'Insert at the end of the template',
+        'prompt.reset': 'Restore built-in wording',
         'shell.label': 'Proxy information supplied to shells', 'shell.off': 'None', 'shell.url': 'Address only (recommended)', 'shell.full': 'Address and credentials',
         'shell.offHint': 'Do not supply proxy information to command environments. The prompt switch above is independent.',
         'shell.urlHint': 'Commands opt in using the address. An authenticated proxy may return 407 (proxy authentication required).',
@@ -860,6 +926,27 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * A full-width multi-line field with a title and description, for content that
+     * needs the whole column. Separate from {@link Field} because the label belongs
+     * above an editor, not beside it.
+     */
+    function TextAreaRow({ id, title, desc, value, placeholder, rows = 4, mono, disabled, onChange }) {
+      const descId = desc ? id + '-desc' : undefined
+      return h('div', { className: 'npdpx-textAreaRow' },
+        h('label', { className: 'npdpx-label', htmlFor: id }, title),
+        desc ? h('p', { id: descId, className: 'npdpx-hint' }, desc) : null,
+        h('textarea', {
+          id,
+          rows,
+          className: 'npdpx-textarea' + (mono ? ' npdpx-mono' : ''),
+          value, placeholder, disabled, spellCheck: false,
+          'aria-describedby': descId,
+          onChange: (event) => onChange(event.target.value),
+        }),
+      )
+    }
+
     /** A boolean preference: the row title is the switch's accessible name. */
     function SwitchRow({ id, title, desc, checked, disabled, onChange }) {
       return h(Row, {
@@ -1007,7 +1094,17 @@ window.__ModuleLoader__.load({
         void model.start()
         return () => { unsubscribe(); model.stop() }
       }, [model])
-      const toggle = (key) => setExpanded((old) => ({ ...old, [key]: !old[key] }))
+      const toggle = (key) => {
+        setExpanded((old) => {
+          const next = { ...old, [key]: !old[key] }
+          // Opening the AI section is the moment the preview becomes useful, and the
+          // model snapshot is not live-updated, so fetch it once on first open.
+          if (key === 'ai' && next.ai === true && model.getSnapshot().promptPreview === null) {
+            void model.previewPrompt()
+          }
+          return next
+        })
+      }
       const save = async () => {
         await model.save()
         const errors = model.getSnapshot().errors
@@ -1075,6 +1172,21 @@ window.__ModuleLoader__.load({
         const resultGood = result?.ok === true && result.status >= 200 && result.status < 400
         const sourceOptions = MODES.map((mode) => ({ value: mode.value, label: t(mode.label) }))
         const shellOptions = SHELL_EXPOSURES.map((option) => ({ value: option.value, label: t(option.label) }))
+        const promptPreview = state.promptPreview
+        const promptPreviewNode = promptPreview?.error
+          ? h('p', { className: 'npdpx-error', role: 'alert' }, t('prompt.previewError'), ' ', safeText(promptPreview.error))
+          : promptPreview === null || promptPreview === undefined
+            ? h('p', { className: 'npdpx-hint' }, t('prompt.previewIdle'))
+            : promptPreview.reason !== 'rendered'
+              // Empty text has two very different causes; naming them avoids reading a
+              // switched-off notice as a broken one.
+              ? h('p', { className: 'npdpx-hint' }, t(promptPreview.reason === 'inactive' ? 'prompt.previewInactive' : 'prompt.previewDisabled'))
+              : h('div', { className: 'npdpx-preview' },
+                h('pre', { className: 'npdpx-previewText' }, safeText(promptPreview.text)),
+                h('p', { className: 'npdpx-hint' }, t('prompt.previewMeta', {
+                  chars: String(promptPreview.text.length),
+                  required: promptPreview.required === true ? t('prompt.requiredYes') : t('prompt.requiredNo'),
+                })))
 
         content = h('form', {
           ref: formRef,
@@ -1220,6 +1332,54 @@ window.__ModuleLoader__.load({
                 onChange: (value) => model.patch('exposeToShell', value),
               }),
             }),
+            // The preview is the point of the whole section: the user must be able to
+            // read the EXACT text the model receives, and to change it. Shown from the
+            // Host's own renderer, so what is displayed cannot drift from what is sent.
+            h('div', { className: 'npdpx-promptSection' },
+              h('div', { className: 'npdpx-promptHead' },
+                h('p', { className: 'npdpx-label' }, t('prompt.preview')),
+                h(Button, {
+                  small: true,
+                  disabled: busy || state.promptPreview?.pending === true,
+                  onClick: () => model.previewPrompt(),
+                }, t('prompt.refresh'))),
+              promptPreviewNode,
+              h(TextAreaRow, {
+                id: 'npdpx-prompt-template',
+                title: t('prompt.template'),
+                desc: t('prompt.templateHint'),
+                value: draft.promptTemplate,
+                placeholder: promptPreview?.facts
+                  ? t('prompt.templatePlaceholder')
+                  : t('prompt.templatePlaceholderGeneric'),
+                rows: 6,
+                mono: true,
+                disabled: busy,
+                onChange: (value) => model.patch('promptTemplate', value),
+              }),
+              promptPreview?.placeholders?.length > 0
+                ? h('div', { className: 'npdpx-placeholders' },
+                  h('span', { className: 'npdpx-hint' }, t('prompt.placeholders')),
+                  promptPreview.placeholders.map((name) =>
+                    h('button', {
+                      key: name,
+                      type: 'button',
+                      className: 'npdpx-chip',
+                      disabled: busy,
+                      title: t('prompt.insertHint'),
+                      // Inserting a known placeholder is the whole affordance: a user
+                      // should not have to memorise the names or their spelling.
+                      onClick: () => model.patch('promptTemplate',
+                        `${draft.promptTemplate}${draft.promptTemplate === '' || draft.promptTemplate.endsWith('\n') ? '' : '\n'}{{${name}}}`),
+                    }, `{{${name}}}`)))
+                : null,
+              h('div', { className: 'npdpx-footerActions' },
+                h(Button, {
+                  small: true,
+                  disabled: busy || draft.promptTemplate === '',
+                  onClick: () => model.patch('promptTemplate', ''),
+                }, t('prompt.reset'))),
+            ),
           ),
 
           h(Disclosure, {

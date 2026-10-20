@@ -242,6 +242,21 @@ check('a save carrying a password is refused when the store is gone', reply.ok =
 const stillWorks = await call({ endpoint: 'status' })
 check('the rest of the route still answers', stillWorks.ok === true)
 
+console.log('\n-- prompt preview endpoint')
+reply = await call({ endpoint: 'prompt', payload: { settings: { promptInjection: true, promptTemplate: '' } } })
+check('the preview reports the rendered built-in text', reply.ok === true && reply.value.reason === 'rendered', reply.value?.reason)
+check('the preview carries the live proxy', reply.value.text.includes('127.0.0.1'))
+check('the preview advertises its placeholders', Array.isArray(reply.value.placeholders) && reply.value.placeholders.includes('proxy'))
+check('the preview declares the entry required', reply.value.required === true)
+check('the preview never leaks the password', !/first-password|pw-with-@-sign/.test(JSON.stringify(reply.value)))
+
+reply = await call({ endpoint: 'prompt', payload: { settings: { promptTemplate: 'Only {{proxy}}' } } })
+check('a draft template is previewed without being saved', reply.value.text.startsWith('Only http://127.0.0.1:'), reply.value.text)
+check('previewing does not persist the draft', (await call({ endpoint: 'status' })).value.settings.promptTemplate === '')
+
+reply = await call({ endpoint: 'prompt', payload: { settings: { promptInjection: false } } })
+check('a switched-off notice previews as empty with a reason', reply.value.text === '' && reply.value.reason === 'disabled', reply.value.reason)
+
 console.log('\n-- persistence never stores the password')
 const file = join(directory, half.SETTINGS_FILE)
 const written = await readFile(file, 'utf8')

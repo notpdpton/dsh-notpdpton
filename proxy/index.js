@@ -117,6 +117,12 @@ export const DEFAULT_SETTINGS = {
   exposeToShell: 'url',
   /** Whether the model is told that a proxy is active. */
   promptInjection: true,
+  /**
+   * User template for the injected notice. An empty string means "use the built-in
+   * rendering", which is the shipped default: the built-in text always reflects the
+   * live policy, so a typo in a custom template cannot silently disable routing facts.
+   */
+  promptTemplate: '',
   /** URL the UI's test button requests. */
   probeUrl: 'https://www.gstatic.com/generate_204',
 }
@@ -162,6 +168,9 @@ export function normalizeSettings(raw) {
     authUser: pickText('authUser'),
     exposeToShell: pickEnum('exposeToShell', SHELL_EXPOSURES),
     promptInjection: pickBool('promptInjection'),
+    // Kept verbatim rather than trimmed: users format the template deliberately, and
+    // an all-whitespace value must still read as "use the built-in rendering".
+    promptTemplate: typeof source.promptTemplate === 'string' ? source.promptTemplate : DEFAULT_SETTINGS.promptTemplate,
     probeUrl: pickText('probeUrl') || DEFAULT_SETTINGS.probeUrl,
   }
 }
@@ -570,6 +579,36 @@ export function checkProxyFields(settings) {
 }
 
 /**
+ * Values a user template can reference, and the built-in text for each.
+ *
+ * The same table drives BOTH the built-in rendering and template substitution, so a
+ * template cannot describe a proxy state the policy does not have: it can only
+ * arrange the facts this component actually knows.
+ */
+export function promptFacts(policy, options) {
+  const proxy = stripCredentials(policy.httpsProxy ?? policy.httpProxy ?? '')
+  const bypass = splitBypass(policy.noProxy)
+  const shellLine =
+    options.exposeToShell === 'off'
+      ? 'Shell commands receive no proxy settings; a command that needs the proxy has to be given one by the user.'
+      : options.exposeToShell === 'full'
+        ? 'The shell environment carries a working proxy URL, so tools such as curl, git or npm can use `$DSH_PROXY_URL` directly as their proxy.'
+        : 'The shell environment carries the proxy address but not its credentials, so pass it explicitly, for example `curl --proxy "$DSH_PROXY_URL" https://example.com`.'
+  return {
+    proxy,
+    source: String(policy.source ?? ''),
+    bypass: bypass.length === 0 ? '' : bypass.slice(0, 12).join(', ') + (bypass.length > 12 ? `, … (${bypass.length} in total)` : ''),
+    shell: shellLine,
+    state: options.exposeToShell === 'off' ? '' : '`$DSH_PROXY_STATE` reports "proxied" or "direct" for this process.',
+    auth:
+      options.authenticated === true && options.exposeToShell !== 'full'
+        ? 'That proxy requires a user name and password. When a shell command fails with 407 Proxy Authentication Required, say so and ask the user to enable "Include credentials" in the proxy settings; never ask them to paste the password into the conversation.'
+        : '',
+    settings: 'To change any of this, point the user at Settings → Plugins → 不二布丁光子 → 网络代理.',
+  }
+}
+
+/**
  * Render the prompt block that tells the model the proxy exists.
  *
  * Written for the model, in English, and kept to what it can act on: which
@@ -578,13 +617,23 @@ export function checkProxyFields(settings) {
  * would look like a usable address, and the password is never described beyond
  * "required".
  *
+ * A user template, when present, replaces the wording but not the facts: `{{name}}`
+ * placeholders are filled from {@link promptFacts}, and an unknown placeholder is
+ * left literal rather than silently emptied, so a typo is visible in the settings
+ * preview instead of producing a blank line in the prompt.
+ *
  * @param policy - the resolved policy.
- * @param options - the shell exposure level and whether auth is configured.
+ * @param options - shell exposure, whether auth is configured, and the user template.
  * @returns the prompt text, or an empty string when there is nothing to say.
  */
 export function renderPrompt(policy, options) {
   if (policy.active !== true) return ''
-  const proxy = stripCredentials(policy.httpsProxy ?? policy.httpProxy ?? '')
+  const facts = promptFacts(policy, options)
+  const template = typeof options.template === 'string' ? options.template.trim() : ''
+  if (template !== '') {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, name) => (name in facts ? facts[name] : match))
+  }
+  const proxy = facts.proxy
   const lines = [
     'Network proxy',
     `- This Harness process sends its outbound HTTP(S) traffic through ${proxy} (source: ${policy.source}).`,
@@ -1055,6 +1104,14 @@ export function apply(ctx) {
   // The model is told about the proxy only while one is in force, and only when
   // the user asked for it. A provider function keeps the text in step with a
   // settings change without re-registering the section.
+  //
+  // `required: true` is load-bearing. Without it the entry counts as OPTIONAL
+  // runtime context, which a composition may remove through
+  // `suppressRuntimeContext()`. Verified against stored session logs: the shipped
+  // `minimal` preset delivered the surrounding runtime context (working directory,
+  // team identity) but dropped this entry, so the model silently never learned a
+  // proxy was in force. Declaration order in the registry is not something this
+  // component can influence, so marking it required is the only reliable fix.
   ctx.inject(['systemPrompt'], (scoped) => {
     const systemPrompt = scoped.get('systemPrompt')
     if (systemPrompt === undefined || typeof systemPrompt.context !== 'function') return
@@ -1063,11 +1120,13 @@ export function apply(ctx) {
         systemPrompt.context({
           name: 'network:proxy',
           order: 105,
+          required: true,
           text: () => {
             if (state.settings.promptInjection !== true) return ''
             return renderPrompt(state.policy, {
               exposeToShell: state.settings.exposeToShell,
               authenticated: state.authenticated,
+              template: state.settings.promptTemplate,
             })
           },
         }),
@@ -1286,6 +1345,39 @@ export function apply(ctx) {
                 // probe that constructs its own agent would pass while the real
                 // requests keep failing.
                 reply(response, 200, { ok: true, value: await probeRoute(state) })
+                return
+              }
+              if (endpoint === 'prompt') {
+                // Preview what WOULD be injected for a given draft, using the live
+                // policy. The settings page needs this for two reasons: the user must
+                // see the exact text the model receives, and an edit must be judged
+                // before it is applied. It never mutates state.
+                const draft = normalizeSettings({ ...state.settings, ...(body?.settings ?? {}) })
+                const facts = promptFacts(state.policy, {
+                  exposeToShell: draft.exposeToShell,
+                  authenticated: state.authenticated,
+                })
+                const text =
+                  draft.promptInjection !== true
+                    ? ''
+                    : renderPrompt(state.policy, {
+                        exposeToShell: draft.exposeToShell,
+                        authenticated: state.authenticated,
+                        template: draft.promptTemplate,
+                      })
+                reply(response, 200, {
+                  ok: true,
+                  value: {
+                    // Distinguishes "nothing to say because no proxy is active" from
+                    // "the user turned the notice off": both render empty text, and a
+                    // silent empty preview would look like a bug.
+                    reason: state.policy.active !== true ? 'inactive' : draft.promptInjection !== true ? 'disabled' : 'rendered',
+                    text,
+                    facts,
+                    placeholders: Object.keys(facts),
+                    required: true,
+                  },
+                })
                 return
               }
               if (endpoint === 'secret') {
