@@ -120,6 +120,18 @@ undici 的全局 dispatcher（`fetch`，即模型 API、`web_fetch`、HTTP MCP�
       name: 'dsh-notpdpton-proxy'
 ```
 
+四个包都不依赖任何第三方 npm 包，也不声明对宿主包的 peer 依赖（包的 `dependencies`
+里只有它自己的三个组件，版本与包同步）：
+
+- Host 半边只 import `node:` 内置模块，插件因此能从 profile 之外的目录直接加载；
+- 浏览器半边只从模块表取 `react`，而 shell 已经 seed 了它；
+- 组件之间不用 `dsh.client.inject` 排序。每块界面都通过
+  `ctx.slots.inject('<slot>', ...)` 等待自己的槽位声明：提供者晚到就等待，
+  提供者未启用则那块界面不出现，但这不会让组件本身加载失败或互相级联。
+
+`test/verify-manifest.mjs` 把这组“无多余依赖约束”的声明当作不变量校验，
+加回 peer 依赖或包级加载顺序会让校验变红。
+
 ## 目录结构
 
 ```

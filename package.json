@@ -61,9 +61,6 @@
     "dsh-notpdpton-recover": "1.1.0",
     "dsh-notpdpton-window": "1.1.0"
   },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5"
-  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

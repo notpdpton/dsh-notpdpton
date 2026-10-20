@@ -1,6 +1,6 @@
 /**
  * Final consistency audit of the shipped bundle: manifest, patch, locales, icon,
- * exports, and the invariants the harness depends on.
+ * exports, dependency declarations, and the invariants the harness depends on.
  *
  * usage: node verify-manifest.mjs
  */
@@ -94,6 +94,45 @@ for (const feature of COMPONENTS) {
 // The design notes ship with the package, because a defect report quotes them.
 for (const doc of ['window-state', 'proxy']) {
   check(`ships docs/${doc}.md`, (pkg.files ?? []).includes('docs/*.md') || (pkg.files ?? []).includes(`docs/${doc}.md`), JSON.stringify(pkg.files))
+}
+
+console.log('\n-- dependency declarations')
+// A package here is mounted from a profile link, so an npm dependency would be
+// resolved against the PROFILE's node_modules rather than this repository, and the
+// Host halves are deliberately importable from outside the profile (Node builtins
+// only). The browser halves ask the module table for `react` alone, which the shell
+// already seeds. Nothing imports @deepseek-ai/cordis or any other runtime package,
+// so a peer dependency on it is a version gate with no consumer: it only turns a
+// future runtime bump into a pnpm peer warning.
+//
+// The client halves likewise declare no package-level arrival order. Every surface
+// waits for the slot it contributes to through `ctx.slots.inject(slotName, ...)`,
+// which is the contract for a provider that arrives later (or never, when its
+// component is switched off). A `dsh.client.inject` row would instead make an
+// unrelated package's load failure cascade into this one.
+for (const [label, manifest] of [
+  ['pack', pkg],
+  ...COMPONENTS.map((feature) => [
+    feature,
+    JSON.parse(readFileSync(new URL(`${feature}/package.json`, root), 'utf8')),
+  ]),
+]) {
+  check(
+    `${label} declares no peer dependency`,
+    Object.keys(manifest.peerDependencies ?? {}).length === 0,
+    JSON.stringify(manifest.peerDependencies),
+  )
+  if (label === 'pack') continue
+  check(
+    `${label} client half declares no package-level load order`,
+    (manifest.dsh?.client?.inject ?? []).length === 0,
+    JSON.stringify(manifest.dsh?.client?.inject),
+  )
+  check(
+    `${label} client half requests no external module`,
+    (manifest.dsh?.client?.external ?? []).length === 0,
+    JSON.stringify(manifest.dsh?.client?.external),
+  )
 }
 
 console.log('\n-- patch')
@@ -518,11 +557,6 @@ check(
 )
 check('window package declares a web client half', windowPkg.dsh?.client?.platform === 'web', windowPkg.dsh?.client?.platform)
 check('window package client half loads immediately', windowPkg.dsh?.client?.immediately === true)
-check(
-  'window package client half injects the conversation UI',
-  Array.isArray(windowPkg.dsh?.client?.inject) && windowPkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'),
-  JSON.stringify(windowPkg.dsh?.client?.inject),
-)
 for (const entry of [
   ['.', './index.js'],
   ['./index.js', './index.js'],
