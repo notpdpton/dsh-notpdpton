@@ -972,6 +972,15 @@ export async function readPassword(ctx) {
  */
 export function describeState(state) {
   const policy = state.policy
+  // The placeholder list and its current values ride with the STATUS snapshot, not
+  // with the preview: editing the template clears the preview, and a shortcut chip
+  // must not disappear just because its text is being edited. The preview response
+  // carries the draft-specific values and wins while it exists; these are the
+  // applied values and keep the chips usable at all times.
+  const facts = promptFacts(policy, {
+    exposeToShell: state.settings.exposeToShell,
+    authenticated: state.authenticated,
+  })
   return {
     settings: state.settings,
     policy: {
@@ -986,6 +995,8 @@ export function describeState(state) {
       notes: policy.notes ?? [],
     },
     transport: state.transport === undefined ? undefined : { kind: state.transport.kind, covers: state.transport.covers },
+    promptFacts: facts,
+    promptPlaceholders: Object.keys(facts),
     authenticated: state.authenticated,
     appliedAt: state.appliedAt,
     diagnostics: state.diagnostics,

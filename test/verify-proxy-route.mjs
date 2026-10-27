@@ -194,6 +194,8 @@ check('the status never carries the password', !JSON.stringify(status).includes(
 check('the status redacts userinfo in reported endpoints', !/alice:pw/.test(JSON.stringify(status)))
 check('applying settings makes the stored credential effective', status.value.authenticated === true)
 check('the reported endpoint shows the credential as redacted', status.value.policy.httpsProxy.includes('***@'), status.value.policy.httpsProxy)
+check('the status carries the placeholder list', Array.isArray(status.value.promptPlaceholders) && status.value.promptPlaceholders.includes('proxy'), JSON.stringify(status.value.promptPlaceholders))
+check('the status carries the applied placeholder values', status.value.promptFacts?.proxy?.includes('127.0.0.1') && typeof status.value.promptFacts?.shell === 'string', status.value.promptFacts?.proxy)
 
 console.log('\n-- routing actually uses the credential')
 seen.length = 0

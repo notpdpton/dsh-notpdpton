@@ -1154,6 +1154,15 @@ window.__ModuleLoader__.load({
           shell: t('shell.' + draft.exposeToShell),
         })
         const promptPreview = state.promptPreview
+        // Editing the template clears the preview, but the shortcut chips must stay.
+        // The status snapshot carries the applied facts/placeholder list; a live
+        // preview carries the draft-specific ones and wins while it exists.
+        const chipFacts = promptPreview?.facts && Object.keys(promptPreview.facts).length > 0
+          ? promptPreview.facts
+          : (status.promptFacts ?? {})
+        const promptPlaceholders = promptPreview?.placeholders?.length > 0
+          ? promptPreview.placeholders
+          : (status.promptPlaceholders ?? [])
         // An empty saved template still means "use the built-in wording", but the
         // editor opens on the Host's starter template so the placeholders are visible
         // and editable instead of an empty box with an example placeholder.
@@ -1167,7 +1176,7 @@ window.__ModuleLoader__.load({
         // The chip's native tooltip carries the CURRENT rendered value, not just the
         // action, so a user can decide whether the placeholder is worth inserting.
         const chipTitle = (name) => {
-          const rendered = promptPreview?.facts?.[name]
+          const rendered = chipFacts[name]
           const value = typeof rendered === 'string' && rendered !== ''
             ? safeText(rendered)
             : t('prompt.emptyValue')
@@ -1366,7 +1375,7 @@ window.__ModuleLoader__.load({
                   rows: 6,
                   className: 'npdpx-textarea npdpx-mono npdpx-promptBox',
                   value: templateValue,
-                  placeholder: promptPreview?.facts
+                  placeholder: Object.keys(chipFacts).length > 0
                     ? t('prompt.templatePlaceholder')
                     : t('prompt.templatePlaceholderGeneric'),
                   disabled: busy,
@@ -1376,9 +1385,9 @@ window.__ModuleLoader__.load({
                 : promptPreviewBox,
               promptView === 'edit'
                 ? h('div', { className: 'npdpx-promptActions' },
-                  promptPreview?.placeholders?.length > 0
+                  promptPlaceholders.length > 0
                     ? h('div', { className: 'npdpx-placeholders' },
-                      promptPreview.placeholders.map((name) =>
+                      promptPlaceholders.map((name) =>
                         h('button', {
                           key: name,
                           type: 'button',

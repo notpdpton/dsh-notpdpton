@@ -39,6 +39,12 @@ function status(settings = {}, patch = {}) {
     settings: settingsOf(settings),
     policy: { source: 'off', active: false, noProxy: 'localhost,127.0.0.1,::1,[::1]', entries: [], unsupported: [], notes: [] },
     transport: { kind: 'native', covers: 'fetch and node:http(s)' },
+    promptFacts: {
+      proxy: 'http://127.0.0.1:1', source: 'off', bypass: 'localhost,127.0.0.1,::1,[::1]',
+      shell: 'Shell commands receive no proxy settings from this component.', state: '', auth: '',
+      settings: 'To change any of this, point the user at Settings → Plugins → 不二布丁光子 → 网络代理.',
+    },
+    promptPlaceholders: ['proxy', 'source', 'bypass', 'shell', 'state', 'auth', 'settings'],
     ...patch,
   }
 }
@@ -543,12 +549,14 @@ await test('template and preview share one fixed-size box', () => {
   // Shortcut chips stay, but the label that wrapped the row is gone and the row
   // itself is a single-line scroller.
   assert.ok(source.includes("className: 'npdpx-placeholders'"))
-  assert.ok(source.includes('promptPreview.placeholders.map'))
+  assert.ok(source.includes('promptPlaceholders.map'))
+  assert.ok(source.includes('status.promptPlaceholders'))
+  assert.ok(source.includes('status.promptFacts'))
   assert.equal(source.includes("t('prompt.placeholders')"), false)
   assert.ok(source.includes('.npdpx-placeholders { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;'))
   // Hovering a chip exposes the rendered fact value, with an explicit empty value
   // for placeholders that render to nothing.
-  assert.ok(source.includes('promptPreview?.facts?.[name]'))
+  assert.ok(source.includes('const rendered = chipFacts[name]'))
   assert.ok(source.includes("t('prompt.emptyValue')"))
   assert.ok(source.includes('title: chipTitle(name)'))
 })
