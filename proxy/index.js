@@ -639,10 +639,10 @@ export function promptFacts(policy, options) {
  *
  * Written for the model, in English, and kept to what it can act on: which
  * traffic is already routed, which traffic is bypassed, and how to reach the
- * network from a shell. When routing is off it says so instead of disappearing,
- * because the injection switch is independent of the routing switch. The URL shown is always credential-free: a masked marker
- * would look like a usable address, and the password is never described beyond
- * "required".
+ * network from a shell. When routing is off it returns an empty string: there is
+ * no proxy state to announce, and an injection switch cannot invent one. The URL
+ * shown is always credential-free: a masked marker would look like a usable
+ * address, and the password is never described beyond "required".
  *
  * A user template, when present, replaces the wording but not the facts: `{{name}}`
  * placeholders are filled from {@link promptFacts}, and an unknown placeholder is
@@ -651,26 +651,16 @@ export function promptFacts(policy, options) {
  *
  * @param policy - the resolved policy.
  * @param options - shell exposure, whether auth is configured, and the user template.
- * @returns the prompt text. The caller decides whether to inject it; an inactive
- *   policy still has a notice to show, because routing and injection are independent.
+ * @returns the prompt text, or an empty string when no proxy is active.
  */
 export function renderPrompt(policy, options) {
+  if (policy.active !== true) return ''
   const facts = promptFacts(policy, options)
   const template = typeof options.template === 'string' ? options.template.trim() : ''
   if (template !== '') {
     return template.replace(/\{\{(\w+)\}\}/g, (match, name) => (name in facts ? facts[name] : match))
   }
   const settingsLine = '- To change any of this, point the user at Settings → Plugins → 不二布丁光子 → 网络代理.'
-  if (policy.active !== true) {
-    const source = String(policy.source ?? 'off')
-    const stateLine =
-      source === 'direct'
-        ? 'This Harness process is configured to connect directly; any proxy supplied by the launcher is overridden for this process.'
-        : source === 'none'
-          ? 'No proxy address was found for the selected source; DSH’s original network settings are in force.'
-          : 'This plugin is not controlling DSH’s network routing; DSH’s original network settings are in force.'
-    return ['Network proxy', `- ${stateLine}`, settingsLine].join('\n')
-  }
   const proxy = facts.proxy
   const lines = [
     'Network proxy',
@@ -1150,11 +1140,10 @@ export function apply(ctx) {
 
   const ready = boot()
 
-  // The model is told about this component's network state whenever the user asked
-  // for it. Injection is independent of routing: switching the proxy off must not
-  // switch the notice off, and switching the notice off must not touch routing. A
-  // provider function keeps the text in step with a settings change without
-  // re-registering the section.
+  // The model is told about the proxy only while one is in force and the user asked
+  // for it. The injection switch is a separate setting, but an inactive policy has
+  // no state to announce, so it always yields an empty string. A provider function
+  // keeps the text in step with a settings change without re-registering the section.
   //
   // `required: true` is load-bearing. Without it the entry counts as OPTIONAL
   // runtime context, which a composition may remove through
@@ -1173,7 +1162,7 @@ export function apply(ctx) {
           order: 105,
           required: true,
           text: () => {
-            if (state.settings.promptInjection !== true) return ''
+            if (state.settings.promptInjection !== true || state.policy.active !== true) return ''
             return renderPrompt(state.policy, {
               exposeToShell: state.settings.exposeToShell,
               authenticated: state.authenticated,
@@ -1408,8 +1397,9 @@ export function apply(ctx) {
                   exposeToShell: draft.exposeToShell,
                   authenticated: state.authenticated,
                 })
+                const active = state.policy.active === true
                 const text =
-                  draft.promptInjection !== true
+                  draft.promptInjection !== true || !active
                     ? ''
                     : renderPrompt(state.policy, {
                         exposeToShell: draft.exposeToShell,
@@ -1419,10 +1409,11 @@ export function apply(ctx) {
                 reply(response, 200, {
                   ok: true,
                   value: {
-                    // An inactive proxy still has a notice; the only empty preview is
-                    // the user turning injection off. Naming that state keeps an empty
-                    // preview from looking like a bug.
-                    reason: draft.promptInjection !== true ? 'disabled' : 'rendered',
+                    // Two distinct empty previews: no proxy is active, or the user
+                    // turned injection off. Naming them keeps an empty preview from
+                    // looking like a bug; an inactive policy wins because it is the
+                    // reason there is no proxy state to inject at all.
+                    reason: !active ? 'inactive' : draft.promptInjection !== true ? 'disabled' : 'rendered',
                     text,
                     // The editor opens on a real starter template instead of an empty
                     // box, and the starter is the same regardless of the injection

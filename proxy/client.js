@@ -670,12 +670,13 @@ window.__ModuleLoader__.load({
         'auth.partial': '密码已写入凭据库，但代理配置未应用成功。请重试保存。',
         'ai.title': '会话提示词与 Shell',
         'ai.summaryShell': '模板 · Shell：{shell}',
-        'ai.prompt': '启用注入', 'ai.promptHint': '独立于代理控制：只控制是否把当前网络状态写进会话提示词。代理未生效时，注入「未接管网络」的说明。',
+        'ai.prompt': '启用注入', 'ai.promptHint': '独立于代理控制：只控制是否把当前网络状态写进会话提示词。代理未生效时不会注入任何内容。',
         'prompt.preview': '实际注入的内容',
         'prompt.viewPreview': '预览', 'prompt.viewEdit': '返回编辑', 'prompt.retry': '重试预览',
         'prompt.loading': '正在生成预览…', 'prompt.previewHint': '由 Host 渲染；未注入时会在此说明原因。',
         'prompt.previewIdle': '点击“预览”后在这里显示实际注入的完整提示词。',
         'prompt.previewDisabled': '「启用注入」已关闭，因此不会注入任何内容。',
+        'prompt.previewInactive': '代理未生效，因此不会注入任何内容。',
         'prompt.previewError': '无法获取预览：',
         'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
         'prompt.requiredYes': '必需项（精简预设也不会忽略）',
@@ -769,12 +770,13 @@ window.__ModuleLoader__.load({
         'auth.partial': 'The password was stored, but the proxy settings could not be applied. Retry saving.',
         'ai.title': 'Session prompt & shell',
         'ai.summaryShell': 'Template · Shell: {shell}',
-        'ai.prompt': 'Enable injection', 'ai.promptHint': 'Independent of proxy control: controls only whether the current network state is written into the session prompt. When no proxy is active, it injects a note that DSH’s original routing is in force.',
+        'ai.prompt': 'Enable injection', 'ai.promptHint': 'Independent of proxy control: controls only whether the current network state is written into the session prompt. Nothing is injected while no proxy is active.',
         'prompt.preview': 'What is actually injected',
         'prompt.viewPreview': 'Preview', 'prompt.viewEdit': 'Back to editor', 'prompt.retry': 'Retry preview',
         'prompt.loading': 'Rendering preview…', 'prompt.previewHint': 'Rendered by the Host; when nothing is injected, the box explains why.',
         'prompt.previewIdle': 'Use Preview to see the exact text currently injected.',
         'prompt.previewDisabled': '“Enable injection” is off, so nothing is injected.',
+        'prompt.previewInactive': 'No proxy is active, so nothing is injected.',
         'prompt.previewError': 'Could not fetch the preview: ',
         'prompt.previewMeta': '{chars} characters; this entry is {required}.',
         'prompt.requiredYes': 'required (lean presets cannot drop it)',
@@ -1190,9 +1192,8 @@ window.__ModuleLoader__.load({
             : promptPreview === null || promptPreview === undefined
               ? h('div', { className: 'npdpx-promptBox npdpx-promptState', role: 'status' }, t('prompt.previewIdle'))
               : promptPreview.reason !== 'rendered'
-                // Injection off is the only empty case now; an inactive proxy still
-                // has a notice, so an empty preview no longer needs a second explanation.
-                ? h('div', { className: 'npdpx-promptBox npdpx-promptState', role: 'status' }, t('prompt.previewDisabled'))
+                // Two empty cases: no proxy is active, or injection is switched off.
+                ? h('div', { className: 'npdpx-promptBox npdpx-promptState', role: 'status' }, t(promptPreview.reason === 'inactive' ? 'prompt.previewInactive' : 'prompt.previewDisabled'))
                 : h('pre', { className: 'npdpx-promptBox npdpx-previewText', 'aria-label': t('prompt.preview') }, safeText(promptPreview.text))
         const promptPreviewMeta = promptPreview?.reason === 'rendered'
           ? t('prompt.previewMeta', {
