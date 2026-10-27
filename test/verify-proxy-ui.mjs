@@ -546,6 +546,11 @@ await test('template and preview share one fixed-size box', () => {
   assert.ok(source.includes('promptPreview.placeholders.map'))
   assert.equal(source.includes("t('prompt.placeholders')"), false)
   assert.ok(source.includes('.npdpx-placeholders { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;'))
+  // Hovering a chip exposes the rendered fact value, with an explicit empty value
+  // for placeholders that render to nothing.
+  assert.ok(source.includes('promptPreview?.facts?.[name]'))
+  assert.ok(source.includes("t('prompt.emptyValue')"))
+  assert.ok(source.includes('title: chipTitle(name)'))
 })
 await test('the bypass field shows the effective list and locks inherited sources', () => {
   assert.ok(source.includes('readOnly: !custom'))

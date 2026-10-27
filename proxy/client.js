@@ -683,7 +683,7 @@ window.__ModuleLoader__.load({
         'prompt.template': '提示词模板', 'prompt.templateHint': '空模板时填入带占位符的初始模板；编辑后即成为自定义模板。点“预览”查看展开后的实际文本。',
         'prompt.templatePlaceholder': '例如：\n{{proxy}}\n这条代理只覆盖本进程…',
         'prompt.templatePlaceholderGeneric': '例如：{{proxy}}',
-        'prompt.insertHint': '点击插入到模板末尾',
+        'prompt.insertHint': '点击插入到模板末尾', 'prompt.emptyValue': '（空值）',
         'prompt.reset': '恢复初始模板',
         'shell.label': '提供给 Shell 的代理信息', 'shell.off': '不提供', 'shell.url': '仅地址（推荐）', 'shell.full': '地址与凭据',
         'shell.offHint': '命令环境不提供代理信息；上面的提示词开关独立生效。',
@@ -782,7 +782,7 @@ window.__ModuleLoader__.load({
         'prompt.template': 'Prompt template', 'prompt.templateHint': 'An empty template is filled with a starter template containing placeholders; editing makes it a custom template. Use Preview for the expanded text.',
         'prompt.templatePlaceholder': 'For example:\n{{proxy}}\nThis proxy covers this process only…',
         'prompt.templatePlaceholderGeneric': 'For example: {{proxy}}',
-        'prompt.insertHint': 'Insert at the end of the template',
+        'prompt.insertHint': 'Insert at the end of the template', 'prompt.emptyValue': '(empty)',
         'prompt.reset': 'Restore starter template',
         'shell.label': 'Proxy information supplied to shells', 'shell.off': 'None', 'shell.url': 'Address only (recommended)', 'shell.full': 'Address and credentials',
         'shell.offHint': 'Do not supply proxy information to command environments. The prompt switch above is independent.',
@@ -1164,6 +1164,15 @@ window.__ModuleLoader__.load({
           setPromptBusy(true)
           void model.previewPrompt().finally(() => setPromptBusy(false))
         }
+        // The chip's native tooltip carries the CURRENT rendered value, not just the
+        // action, so a user can decide whether the placeholder is worth inserting.
+        const chipTitle = (name) => {
+          const rendered = promptPreview?.facts?.[name]
+          const value = typeof rendered === 'string' && rendered !== ''
+            ? safeText(rendered)
+            : t('prompt.emptyValue')
+          return `${value}\n\n${t('prompt.insertHint')}`
+        }
         // The preview occupies the SAME box as the template editor. Every state is
         // rendered as that box, so switching modes never changes the form's height.
         const promptPreviewBox = promptBusy
@@ -1375,7 +1384,7 @@ window.__ModuleLoader__.load({
                           type: 'button',
                           className: 'npdpx-chip',
                           disabled: busy,
-                          title: t('prompt.insertHint'),
+                          title: chipTitle(name),
                           onClick: () => model.patch('promptTemplate',
                             `${templateValue}${templateValue === '' || templateValue.endsWith('\n') ? '' : '\n'}{{${name}}}`),
                         }, `{{${name}}}`)))
