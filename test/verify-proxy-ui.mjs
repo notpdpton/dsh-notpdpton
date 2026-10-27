@@ -540,6 +540,12 @@ await test('template and preview share one fixed-size box', () => {
   assert.ok(source.includes("t(promptView === 'edit' ? 'prompt.viewPreview' : 'prompt.viewEdit')"))
   assert.ok(source.includes('value: templateValue'))
   assert.ok(source.includes('promptPreview?.templateSeed'))
+  // Shortcut chips stay, but the label that wrapped the row is gone and the row
+  // itself is a single-line scroller.
+  assert.ok(source.includes("className: 'npdpx-placeholders'"))
+  assert.ok(source.includes('promptPreview.placeholders.map'))
+  assert.equal(source.includes("t('prompt.placeholders')"), false)
+  assert.ok(source.includes('.npdpx-placeholders { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;'))
 })
 await test('the bypass field shows the effective list and locks inherited sources', () => {
   assert.ok(source.includes('readOnly: !custom'))
