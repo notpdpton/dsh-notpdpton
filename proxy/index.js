@@ -115,7 +115,10 @@ export const DEFAULT_SETTINGS = {
   authUser: '',
   /** What the shell tools receive through `DSH_PROXY_*`. */
   exposeToShell: 'url',
-  /** Whether the model is told that a proxy is active. */
+  /**
+   * Whether the model is told about this component's network state. Independent of
+   * `enabled`: switching routing off must not switch the notice off, and vice versa.
+   */
   promptInjection: true,
   /**
    * User template for the injected notice. An empty string means "use the built-in
@@ -586,22 +589,26 @@ export function checkProxyFields(settings) {
  * arrange the facts this component actually knows.
  */
 export function promptFacts(policy, options) {
+  const active = policy.active === true
   const proxy = stripCredentials(policy.httpsProxy ?? policy.httpProxy ?? '')
   const bypass = splitBypass(policy.noProxy)
-  const shellLine =
-    options.exposeToShell === 'off'
+  const shellLine = active
+    ? options.exposeToShell === 'off'
       ? 'Shell commands receive no proxy settings; a command that needs the proxy has to be given one by the user.'
       : options.exposeToShell === 'full'
         ? 'The shell environment carries a working proxy URL, so tools such as curl, git or npm can use `$DSH_PROXY_URL` directly as their proxy.'
         : 'The shell environment carries the proxy address but not its credentials, so pass it explicitly, for example `curl --proxy "$DSH_PROXY_URL" https://example.com`.'
+    : 'Shell commands receive no proxy settings from this component.'
   return {
     proxy,
     source: String(policy.source ?? ''),
     bypass: bypass.length === 0 ? '' : bypass.slice(0, 12).join(', ') + (bypass.length > 12 ? `, … (${bypass.length} in total)` : ''),
     shell: shellLine,
-    state: options.exposeToShell === 'off' ? '' : '`$DSH_PROXY_STATE` reports "proxied" or "direct" for this process.',
+    state: active && options.exposeToShell !== 'off'
+      ? '`$DSH_PROXY_STATE` reports "proxied" or "direct" for this process.'
+      : '',
     auth:
-      options.authenticated === true && options.exposeToShell !== 'full'
+      active && options.authenticated === true && options.exposeToShell !== 'full'
         ? 'That proxy requires a user name and password. When a shell command fails with 407 Proxy Authentication Required, say so and ask the user to enable "Include credentials" in the proxy settings; never ask them to paste the password into the conversation.'
         : '',
     settings: 'To change any of this, point the user at Settings → Plugins → 不二布丁光子 → 网络代理.',
@@ -609,11 +616,12 @@ export function promptFacts(policy, options) {
 }
 
 /**
- * Render the prompt block that tells the model the proxy exists.
+ * Render the prompt block that tells the model which network state is in force.
  *
  * Written for the model, in English, and kept to what it can act on: which
  * traffic is already routed, which traffic is bypassed, and how to reach the
- * network from a shell. The URL shown is always credential-free: a masked marker
+ * network from a shell. When routing is off it says so instead of disappearing,
+ * because the injection switch is independent of the routing switch. The URL shown is always credential-free: a masked marker
  * would look like a usable address, and the password is never described beyond
  * "required".
  *
@@ -624,14 +632,25 @@ export function promptFacts(policy, options) {
  *
  * @param policy - the resolved policy.
  * @param options - shell exposure, whether auth is configured, and the user template.
- * @returns the prompt text, or an empty string when there is nothing to say.
+ * @returns the prompt text. The caller decides whether to inject it; an inactive
+ *   policy still has a notice to show, because routing and injection are independent.
  */
 export function renderPrompt(policy, options) {
-  if (policy.active !== true) return ''
   const facts = promptFacts(policy, options)
   const template = typeof options.template === 'string' ? options.template.trim() : ''
   if (template !== '') {
     return template.replace(/\{\{(\w+)\}\}/g, (match, name) => (name in facts ? facts[name] : match))
+  }
+  const settingsLine = '- To change any of this, point the user at Settings → Plugins → 不二布丁光子 → 网络代理.'
+  if (policy.active !== true) {
+    const source = String(policy.source ?? 'off')
+    const stateLine =
+      source === 'direct'
+        ? 'This Harness process is configured to connect directly; any proxy supplied by the launcher is overridden for this process.'
+        : source === 'none'
+          ? 'No proxy address was found for the selected source; DSH’s original network settings are in force.'
+          : 'This plugin is not controlling DSH’s network routing; DSH’s original network settings are in force.'
+    return ['Network proxy', `- ${stateLine}`, settingsLine].join('\n')
   }
   const proxy = facts.proxy
   const lines = [
@@ -661,7 +680,7 @@ export function renderPrompt(policy, options) {
     }
     lines.push('- `$DSH_PROXY_STATE` reports "proxied" or "direct" for this process.')
   }
-  lines.push('- To change any of this, point the user at Settings → Plugins → 不二布丁光子 → 网络代理.')
+  lines.push(settingsLine)
   return lines.join('\n')
 }
 
@@ -1101,16 +1120,18 @@ export function apply(ctx) {
 
   const ready = boot()
 
-  // The model is told about the proxy only while one is in force, and only when
-  // the user asked for it. A provider function keeps the text in step with a
-  // settings change without re-registering the section.
+  // The model is told about this component's network state whenever the user asked
+  // for it. Injection is independent of routing: switching the proxy off must not
+  // switch the notice off, and switching the notice off must not touch routing. A
+  // provider function keeps the text in step with a settings change without
+  // re-registering the section.
   //
   // `required: true` is load-bearing. Without it the entry counts as OPTIONAL
   // runtime context, which a composition may remove through
   // `suppressRuntimeContext()`. Verified against stored session logs: the shipped
   // `minimal` preset delivered the surrounding runtime context (working directory,
-  // team identity) but dropped this entry, so the model silently never learned a
-  // proxy was in force. Declaration order in the registry is not something this
+  // team identity) but dropped this entry, so the model silently never learned the
+  // network state. Declaration order in the registry is not something this
   // component can influence, so marking it required is the only reliable fix.
   ctx.inject(['systemPrompt'], (scoped) => {
     const systemPrompt = scoped.get('systemPrompt')
@@ -1368,10 +1389,10 @@ export function apply(ctx) {
                 reply(response, 200, {
                   ok: true,
                   value: {
-                    // Distinguishes "nothing to say because no proxy is active" from
-                    // "the user turned the notice off": both render empty text, and a
-                    // silent empty preview would look like a bug.
-                    reason: state.policy.active !== true ? 'inactive' : draft.promptInjection !== true ? 'disabled' : 'rendered',
+                    // An inactive proxy still has a notice; the only empty preview is
+                    // the user turning injection off. Naming that state keeps an empty
+                    // preview from looking like a bug.
+                    reason: draft.promptInjection !== true ? 'disabled' : 'rendered',
                     text,
                     facts,
                     placeholders: Object.keys(facts),

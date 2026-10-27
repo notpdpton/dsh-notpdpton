@@ -255,8 +255,15 @@ check('the full level still redacts the password', !/p%40ss|alice:/.test(promptF
 check('the full level does not mention 407', !promptFull.includes('407'))
 const promptOff = host.renderPrompt(credentialed, { exposeToShell: 'off', authenticated: true })
 check('the off level says the shell gets nothing', promptOff.includes('no proxy settings'))
-check('a direct policy renders no prompt at all', host.renderPrompt(direct, { exposeToShell: 'url', authenticated: false }) === '')
-check('a disabled component renders no prompt', host.renderPrompt(disabled, { exposeToShell: 'url', authenticated: false }) === '')
+const directPrompt = host.renderPrompt(direct, { exposeToShell: 'url', authenticated: false })
+const offPrompt = host.renderPrompt(disabled, { exposeToShell: 'url', authenticated: false })
+check('a direct policy still has a notice when injection is on', directPrompt.includes('connect directly'), directPrompt)
+check('a disabled component says it is not controlling routing', offPrompt.includes('not controlling'), offPrompt)
+check('an inactive notice names no proxy URL', !/https?:\/\//.test(directPrompt + offPrompt))
+check('routing and injection are independent settings', (() => {
+  const value = host.normalizeSettings({ enabled: false, promptInjection: true })
+  return value.enabled === false && value.promptInjection === true
+})())
 check('the prompt is English', promptUrl.startsWith('Network proxy'))
 
 // A user template replaces the wording but must not be able to invent a proxy state:
@@ -271,7 +278,9 @@ const unknownPlaceholder = host.renderPrompt(credentialed, { template: 'x {{nope
 check('an unknown placeholder stays literal so a typo is visible', unknownPlaceholder.includes('{{nope}}'), unknownPlaceholder)
 const blankTemplate = host.renderPrompt(credentialed, { template: '   ' })
 check('a whitespace-only template falls back to the built-in text', blankTemplate.startsWith('Network proxy'), blankTemplate.slice(0, 40))
-check('a template still renders nothing when no proxy is active', host.renderPrompt(direct, { template: 'x {{proxy}}' }) === '')
+check('a template renders with an inactive policy too', host.renderPrompt(direct, { template: 'x {{proxy}}{{source}}' }) === 'x direct')
+const inactiveFacts = host.promptFacts(disabled, { exposeToShell: 'url' })
+check('inactive facts do not promise shell proxy settings', inactiveFacts.shell.includes('no proxy settings') && inactiveFacts.state === '' && inactiveFacts.auth === '')
 const facts = host.promptFacts(credentialed, { exposeToShell: 'url', authenticated: true })
 check('the facts table never exposes a password', !/p%40ss|alice:/.test(JSON.stringify(facts)), JSON.stringify(facts))
 check(

@@ -445,6 +445,14 @@ await test('status refresh never grants an edit the applied badge prematurely', 
   assert.equal(model.getSnapshot().draft.enabled, true)
   model.stop()
 })
+await test('routing and prompt injection edit independent fields', async () => {
+  const { model } = await mounted({ enabled: true, promptInjection: true })
+  model.patch('enabled', false)
+  assert.equal(model.getSnapshot().draft.promptInjection, true)
+  model.patch('promptInjection', false)
+  assert.equal(model.getSnapshot().draft.enabled, false)
+  model.stop()
+})
 await test('settings serialization never includes a password or transient fields', () => {
   const settings = settingsOf({ password: 'sensitive', secret: 'typed', operation: 'saving', proxy: 'http://h:1' })
   assert.equal(Object.hasOwn(settings, 'password'), false)
@@ -509,6 +517,7 @@ await test('layout is component-scoped and responsive without literal theme colo
 })
 await test('every control carries an explicit accessible name and state', () => {
   assert.match(source, /role: 'switch'/)
+  assert.equal(/disabled:\s*!draft\.(enabled|promptInjection)/.test(source), false)
   assert.match(source, /'aria-checked': checked/)
   assert.match(source, /role: 'tablist'/)
   assert.match(source, /role: 'tab'/)

@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
 
-const half = await import('file:///C:/Users/notpdpton/.dsh/profiles/desktop/node_modules/dsh-notpdpton-proxy/index.js')
+const half = await import(new URL('../proxy/index.js', import.meta.url).href)
 const directory = await mkdtemp(join(tmpdir(), 'npd-route-'))
 process.env.DSH_PROFILE_DIR = directory
 
@@ -44,10 +44,12 @@ const credentials = {
 }
 
 let route
+let promptEntry
 const effects = []
 const services = {
   webServer: { register: (definition) => ((route = definition), () => {}) },
   credentials,
+  systemPrompt: { context: (definition) => ((promptEntry = definition), () => {}) },
 }
 const context = {
   get: (key) => services[key],
@@ -256,6 +258,22 @@ check('previewing does not persist the draft', (await call({ endpoint: 'status' 
 
 reply = await call({ endpoint: 'prompt', payload: { settings: { promptInjection: false } } })
 check('a switched-off notice previews as empty with a reason', reply.value.text === '' && reply.value.reason === 'disabled', reply.value.reason)
+
+console.log('\n-- injection is independent of routing')
+reply = await call({ endpoint: 'save', payload: { settings: { enabled: false, authUser: 'bob', mode: 'custom', proxy: `127.0.0.1:${proxy.address().port}` }, secret: '' } })
+check('the proxy can be switched off on its own', reply.ok === true, reply.error?.message)
+reply = await call({ endpoint: 'prompt', payload: { settings: { promptInjection: true } } })
+check('an inactive proxy still previews a notice when injection is on', reply.value.reason === 'rendered' && /not controlling|original network settings/.test(reply.value.text), JSON.stringify(reply.value))
+check('the inactive notice does not pretend a proxy is active', !reply.value.text.includes(String(proxy.address().port)))
+reply = await call({ endpoint: 'prompt', payload: { settings: { promptInjection: false } } })
+check('switching injection off empties the preview without touching routing', reply.value.reason === 'disabled' && reply.value.text === '')
+const disabledStatus = await call({ endpoint: 'status' })
+check('the routing switch stayed off independently', disabledStatus.value.settings.enabled === false && disabledStatus.value.settings.promptInjection === true)
+check('the live prompt entry still renders while routing is off', typeof promptEntry?.text === 'function' && promptEntry.text().includes('not controlling'), promptEntry?.text?.())
+reply = await call({ endpoint: 'save', payload: { settings: { enabled: false, promptInjection: false }, secret: '' } })
+check('injection can be switched off while routing stays off', reply.ok === true && promptEntry.text() === '')
+reply = await call({ endpoint: 'save', payload: { settings: { enabled: false, promptInjection: true }, secret: '' } })
+check('and switched back on without enabling routing', reply.ok === true && promptEntry.text().includes('not controlling'))
 
 console.log('\n-- persistence never stores the password')
 const file = join(directory, half.SETTINGS_FILE)

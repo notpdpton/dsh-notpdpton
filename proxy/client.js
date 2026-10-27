@@ -553,16 +553,11 @@ window.__ModuleLoader__.load({
 .npdpx-result[data-tone="error"] { border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent); }
 .npdpx-result strong { font-weight: 500; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
 
-/* ---- runtime facts ----------------------------------------------------- */
-.npdpx-facts { display: grid; grid-template-columns: minmax(84px, 110px) minmax(0, 1fr); gap: 8px 16px; padding-bottom: 4px; font-size: 12px; line-height: 18px; }
-.npdpx-facts dt { color: var(--dsw-alias-label-tertiary); }
-.npdpx-facts dd { min-width: 0; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); }
-/* The diagnostics list ends the runtime surface, and the action row follows it
-   immediately: measured 0px between the last bullet and the buttons, which read as
-   one block of text touching the controls. 12px above (the list is a continuation of
-   the facts table) and 16px below (the same close every other section uses) give it
-   the same rhythm as the rest of the block. */
-.npdpx-notes { margin: 12px 0 16px; padding-left: 18px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+/* ---- diagnostics -------------------------------------------------------- */
+/* The read-only facts table is gone; only its actionable warnings remain. They sit
+   directly under the status strip, so a refused bypass entry or a damaged settings
+   file stays visible without opening a panel. */
+.npdpx-notes { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 
 /* ---- notices (8% fill, 20% border of the semantic hue) ------------------ */
 /* The notice sits between the last section and the commit row, so it is bounded by
@@ -620,8 +615,6 @@ window.__ModuleLoader__.load({
   .npdpx-segment { height: 32px; padding: 0 10px; text-align: left; }
   .npdpx-segment[aria-selected="true"] { background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-soft); }
   .npdpx-fieldCols { grid-template-columns: minmax(0, 1fr); }
-  .npdpx-facts { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
-  .npdpx-facts dd { padding-bottom: 6px; }
   .npdpx-footerActions { width: 100%; }
   .npdpx-footerActions > button { flex: 1 1 0; }
 }
@@ -630,7 +623,7 @@ window.__ModuleLoader__.load({
     const LOCALE_DICTS = {
       zh: {
         'group.title': '网络代理', 'group.desc': '管理 DSH 的网络连接，不修改系统代理。',
-        'enable.label': '启用代理', 'enable.hint': '修改后点击“保存并应用”生效。关闭时保留 DSH 原有网络设置。',
+        'enable.label': '启用代理', 'enable.hint': '只控制 DSH 自身请求是否走代理。下方的会话提示词注入是独立开关，互不影响。',
         'applied.label': '当前生效', 'state.off': '未启用', 'state.proxied': '代理已启用',
         'state.direct': '强制直连', 'state.none': '未找到可用代理', 'state.error': '应用异常',
         'state.inherited': '未接管原有网络设置', 'state.pending': '未保存',
@@ -660,12 +653,12 @@ window.__ModuleLoader__.load({
         'auth.confirmButton': '确认清除', 'auth.cancel': '取消',
         'auth.pending': '凭据库已更新，代理配置尚未应用；请点击“保存并应用”。',
         'auth.partial': '密码已写入凭据库，但代理配置未应用成功。请重试保存。',
-        'ai.title': 'AI 与命令使用', 'ai.summary': '提示词与 Shell 分开控制',
-        'ai.prompt': '在对话中告知模型', 'ai.promptHint': '仅在代理生效时注入代理信息，提示词不包含密码。',
+        'ai.title': '会话提示词与 Shell',
+        'ai.summaryState': '注入：{injection} · Shell：{shell}', 'ai.on': '已开启', 'ai.off': '已关闭',
+        'ai.prompt': '会话提示词注入', 'ai.promptHint': '独立于代理控制：只控制是否把当前网络状态写进会话提示词。代理未生效时，注入「未接管网络」的说明。',
         'prompt.preview': '实际注入的内容', 'prompt.refresh': '重新生成预览',
         'prompt.previewIdle': '展开此区域后会显示当前实际注入的完整提示词。',
-        'prompt.previewInactive': '当前没有生效的代理，因此不会注入任何内容。',
-        'prompt.previewDisabled': '「在对话中告知模型」已关闭，因此不会注入任何内容。',
+        'prompt.previewDisabled': '「会话提示词注入」已关闭，因此不会注入任何内容。',
         'prompt.previewError': '无法获取预览：',
         'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
         'prompt.requiredYes': '必需项（精简预设也不会忽略）',
@@ -705,10 +698,7 @@ window.__ModuleLoader__.load({
         'probe.result': '测试结果', 'probe.ok': '收到 HTTP {status} · {ms} ms',
         'probe.failed': '请求失败：{error}', 'probe.httpError': '网络请求已返回，但目标响应 HTTP {status}。',
         'probe.route': 'Host 报告的路由：{route}', 'probe.direct': '直连 / 绕过代理',
-        'runtime.title': '运行信息', 'runtime.summary': '查看当前地址与诊断', 'runtime.count': '{count} 条诊断',
-        'runtime.source': '生效来源', 'runtime.http': 'HTTP 代理', 'runtime.https': 'HTTPS 代理',
-        'runtime.bypass': '有效绕过列表', 'runtime.transport': '网络栈', 'runtime.file': '设置文件',
-        'runtime.inherited': '未接管 / 使用原有设置',
+        'state.inherited': '未接管 / 使用原有设置',
         // Host diagnostics are written in one fixed language so the file, the log
         // and this panel agree; the panel is bilingual, so the DISPLAY language is
         // chosen here. Unrecognised sentences fall through verbatim.
@@ -725,12 +715,11 @@ window.__ModuleLoader__.load({
         'note.unreadable': '无法读取 {file}：{error}',
         'note.badJson': '{file} 不是合法的 JSON（{error}）；已改用默认设置。',
         'note.releaseFailed': '无法释放先前的代理设置：{error}',
-        'runtime.socks': 'SOCKS5 是当前运行时的实验特性。',
-        'runtime.unsupported': '以下绕过规则未生效：{entries}',
+        'warning.socks': 'SOCKS5 是当前运行时的实验特性。',
       },
       en: {
         'group.title': 'Network proxy', 'group.desc': 'Manage DSH connections without changing the system proxy.',
-        'enable.label': 'Enable proxy', 'enable.hint': 'Use Save & apply to activate edits. Turning this off preserves DSH’s original network settings.',
+        'enable.label': 'Enable proxy', 'enable.hint': 'Controls only whether DSH’s own requests use the proxy. Session prompt injection below is an independent switch.',
         'applied.label': 'Applied now', 'state.off': 'Off', 'state.proxied': 'Proxy active',
         'state.direct': 'Forced direct', 'state.none': 'No proxy found', 'state.error': 'Application error',
         'state.inherited': 'Original network settings retained', 'state.pending': 'Unsaved',
@@ -760,12 +749,12 @@ window.__ModuleLoader__.load({
         'auth.confirmButton': 'Confirm clear', 'auth.cancel': 'Cancel',
         'auth.pending': 'The credential store changed, but routing has not been reapplied. Use Save & apply.',
         'auth.partial': 'The password was stored, but the proxy settings could not be applied. Retry saving.',
-        'ai.title': 'AI & command access', 'ai.summary': 'Separate prompt and shell controls',
-        'ai.prompt': 'Tell the model in conversation', 'ai.promptHint': 'Inject proxy information only while active. Passwords never enter the prompt.',
+        'ai.title': 'Session prompt & shell',
+        'ai.summaryState': 'Injection: {injection} · Shell: {shell}', 'ai.on': 'on', 'ai.off': 'off',
+        'ai.prompt': 'Session prompt injection', 'ai.promptHint': 'Independent of proxy control: controls only whether the current network state is written into the session prompt. When no proxy is active, it injects a note that DSH’s original routing is in force.',
         'prompt.preview': 'What is actually injected', 'prompt.refresh': 'Regenerate preview',
         'prompt.previewIdle': 'Expand this section to see the exact prompt text currently injected.',
-        'prompt.previewInactive': 'No proxy is active, so nothing is injected.',
-        'prompt.previewDisabled': '“Tell the model in conversation” is off, so nothing is injected.',
+        'prompt.previewDisabled': '“Session prompt injection” is off, so nothing is injected.',
         'prompt.previewError': 'Could not fetch the preview: ',
         'prompt.previewMeta': '{chars} characters; this entry is {required}.',
         'prompt.requiredYes': 'required (lean presets cannot drop it)',
@@ -805,10 +794,7 @@ window.__ModuleLoader__.load({
         'probe.result': 'Test result', 'probe.ok': 'HTTP {status} received · {ms} ms',
         'probe.failed': 'Request failed: {error}', 'probe.httpError': 'The request returned, but the target answered HTTP {status}.',
         'probe.route': 'Route reported by Host: {route}', 'probe.direct': 'Direct / bypassed',
-        'runtime.title': 'Runtime details', 'runtime.summary': 'Applied endpoints and diagnostics', 'runtime.count': '{count} diagnostics',
-        'runtime.source': 'Applied source', 'runtime.http': 'HTTP proxy', 'runtime.https': 'HTTPS proxy',
-        'runtime.bypass': 'Effective bypass list', 'runtime.transport': 'Network stack', 'runtime.file': 'Settings file',
-        'runtime.inherited': 'Not managed / original settings',
+        'state.inherited': 'Not managed / original settings',
         // Host diagnostics are written in one fixed language so the file, the log
         // and this panel agree; the panel is bilingual, so the DISPLAY language is
         // chosen here. Unrecognised sentences fall through verbatim.
@@ -825,8 +811,7 @@ window.__ModuleLoader__.load({
         'note.unreadable': 'Could not read {file}: {error}',
         'note.badJson': '{file} is not valid JSON ({error}); using defaults.',
         'note.releaseFailed': 'The previous proxy could not be released: {error}',
-        'runtime.socks': 'SOCKS5 is experimental in the current runtime.',
-        'runtime.unsupported': 'These bypass entries are not applied: {entries}',
+        'warning.socks': 'SOCKS5 is experimental in the current runtime.',
       },
     }
 
@@ -1039,25 +1024,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** One label/value pair for the runtime details. */
-    /**
-     * One label/value pair in the runtime details.
-     *
-     * `mono` formats an IDENTIFIER — a URL, a host list, a file name. When the row has
-     * no value, the placeholder is prose ("not managed / original settings"), and
-     * prose takes the normal face like every other sentence on the page. Applying the
-     * monospace face to the placeholder too is what made the three unmanaged rows sit
-     * 1-2px off their neighbours: same words, different font, different line box.
-     *
-     * @param props - the label, the display value, whether the value is an identifier,
-     *   and whether the value is a placeholder rather than real data.
-     */
-    function Fact({ label, value, mono, placeholder }) {
-      return h(React.Fragment, null,
-        h('dt', null, label),
-        h('dd', { className: mono && !placeholder ? 'npdpx-mono' : undefined }, value))
-    }
-
     /** Skeletons, only while the first status reply is in flight. */
     function Loading() {
       return h('div', { className: 'npdpx-loading', 'aria-busy': true },
@@ -1086,7 +1052,7 @@ window.__ModuleLoader__.load({
       if (modelRef.current === undefined) modelRef.current = createSettingsModel()
       const model = modelRef.current
       const [state, setState] = useState(model.getSnapshot)
-      const [expanded, setExpanded] = useState({ auth: false, ai: false, advanced: false, runtime: false })
+      const [expanded, setExpanded] = useState({ auth: false, ai: false, advanced: false })
       const [confirmClear, setConfirmClear] = useState(false)
       const formRef = useRef(null)
       useEffect(() => {
@@ -1130,7 +1096,6 @@ window.__ModuleLoader__.load({
         : null
 
       let content
-      let runtime = null
       if (state.phase === 'loading') {
         content = h(Loading)
       } else if (state.phase === 'error') {
@@ -1149,19 +1114,23 @@ window.__ModuleLoader__.load({
           : t('state.inherited')
         const knownSource = MODES.some(({ value }) => value === policy.source)
           ? t('mode.' + policy.source)
-          : t('runtime.inherited')
+          : t('state.inherited')
         const credentialSummary = state.credentialPending
           ? t('state.pending')
           : credential.phase === 'ready'
             ? (credential.configured ? t('auth.stored') : t('auth.optional'))
             : (credential.phase === 'loading' ? t('auth.checking') : t('auth.unknown'))
-        const notes = [...new Set([
+        // The old read-only "Runtime details" panel held these warnings under a
+        // table of facts. The table is gone, but silently dropping a refused bypass
+        // entry or a damaged settings file would hide the reason routing or the form
+        // does not look the way the user expects. Keep only the warnings, as a
+        // compact list that appears when there is something to say.
+        const warnings = [...new Set([
           ...(policy.notes ?? []),
           ...(status.diagnostics ?? []),
           status.lastError,
+          policy.experimental ? t('warning.socks') : undefined,
         ].filter(Boolean))]
-        const unsupported = policy.unsupported ?? []
-        const diagnosticsCount = notes.length + (policy.experimental ? 1 : 0)
         const field = (key, label, options = {}) => h(Field, {
           key, id: 'npdpx-' + key, label, value: draft[key], disabled: busy,
           onChange: (value) => model.patch(key, value),
@@ -1172,15 +1141,19 @@ window.__ModuleLoader__.load({
         const resultGood = result?.ok === true && result.status >= 200 && result.status < 400
         const sourceOptions = MODES.map((mode) => ({ value: mode.value, label: t(mode.label) }))
         const shellOptions = SHELL_EXPOSURES.map((option) => ({ value: option.value, label: t(option.label) }))
+        const aiSummary = t('ai.summaryState', {
+          injection: draft.promptInjection ? t('ai.on') : t('ai.off'),
+          shell: t('shell.' + draft.exposeToShell),
+        })
         const promptPreview = state.promptPreview
         const promptPreviewNode = promptPreview?.error
           ? h('p', { className: 'npdpx-error', role: 'alert' }, t('prompt.previewError'), ' ', safeText(promptPreview.error))
           : promptPreview === null || promptPreview === undefined
             ? h('p', { className: 'npdpx-hint' }, t('prompt.previewIdle'))
             : promptPreview.reason !== 'rendered'
-              // Empty text has two very different causes; naming them avoids reading a
-              // switched-off notice as a broken one.
-              ? h('p', { className: 'npdpx-hint' }, t(promptPreview.reason === 'inactive' ? 'prompt.previewInactive' : 'prompt.previewDisabled'))
+              // Injection off is the only empty case now; an inactive proxy still has
+              // a notice, so an empty preview no longer needs a second explanation.
+              ? h('p', { className: 'npdpx-hint' }, t('prompt.previewDisabled'))
               : h('div', { className: 'npdpx-preview' },
                 h('pre', { className: 'npdpx-previewText' }, safeText(promptPreview.text)),
                 h('p', { className: 'npdpx-hint' }, t('prompt.previewMeta', {
@@ -1201,6 +1174,11 @@ window.__ModuleLoader__.load({
             direct: policy.source === 'direct' ? t('mode.direct.desc') : null,
             pending: dirty ? t('state.pending') : null,
           }),
+
+          warnings.length
+            ? h('ul', { className: 'npdpx-notes', 'aria-live': 'polite' },
+              warnings.map((warning, index) => h('li', { key: index }, safeText(localizeNote(warning, t)))))
+            : null,
 
           h('div', { className: 'npdpx-section' },
             h(SwitchRow, {
@@ -1306,7 +1284,7 @@ window.__ModuleLoader__.load({
           h(Disclosure, {
             id: 'npdpx-ai',
             title: t('ai.title'),
-            summary: t('ai.summary'),
+            summary: aiSummary,
             open: expanded.ai,
             onToggle: () => toggle('ai'),
           },
@@ -1431,7 +1409,7 @@ window.__ModuleLoader__.load({
                         route: result.route.proxied
                           ? safeText(result.route.proxy)
                           : (result.route.source === 'off' || result.route.source === 'none'
-                            ? t('runtime.inherited')
+                            ? t('state.inherited')
                             : t('probe.direct')),
                       }))
                       : null)
@@ -1450,8 +1428,7 @@ window.__ModuleLoader__.load({
                 onClick: () => { model.revert(); setConfirmClear(false) },
               }, t('action.revert')),
               // The form's commit button: inverted label, and dead until there is
-              // something to commit. Reapplying an unchanged configuration is the
-              // one action that is not a save, so it lives in Runtime details.
+              // something to commit.
               h('button', {
                 type: 'button',
                 className: 'npdpx-save',
@@ -1459,72 +1436,13 @@ window.__ModuleLoader__.load({
                 onClick: () => void save(),
               }, t(state.operation === 'saving' ? 'action.saving' : 'action.save')))),
         )
-
-        runtime = h(Disclosure, {
-          id: 'npdpx-runtime',
-          title: t('runtime.title'),
-          summary: diagnosticsCount
-            ? t('runtime.count', { count: diagnosticsCount })
-            : t('runtime.summary'),
-          open: expanded.runtime,
-          onToggle: () => toggle('runtime'),
-        },
-          h('dl', { className: 'npdpx-facts' },
-            h(Fact, { label: t('runtime.source'), value: knownSource }),
-            // Each identifier row drops the monospace face when it shows the
-            // placeholder sentence instead of a real value.
-            h(Fact, {
-              label: t('runtime.http'),
-              value: policy.httpProxy ? safeText(policy.httpProxy) : t('runtime.inherited'),
-              mono: true,
-              placeholder: !policy.httpProxy,
-            }),
-            h(Fact, {
-              label: t('runtime.https'),
-              value: policy.httpsProxy ? safeText(policy.httpsProxy) : t('runtime.inherited'),
-              mono: true,
-              placeholder: !policy.httpsProxy,
-            }),
-            h(Fact, {
-              label: t('runtime.bypass'),
-              value: policy.noProxy ? safeText(policy.noProxy) : t('runtime.inherited'),
-              mono: true,
-              placeholder: !policy.noProxy,
-            }),
-            h(Fact, {
-              label: t('runtime.transport'),
-              value: status.transport?.covers ?? t('runtime.inherited'),
-            }),
-            h(Fact, {
-              label: t('runtime.file'),
-              value: status.file ? safeText(status.file) : t('runtime.inherited'),
-              mono: true,
-              placeholder: !status.file,
-            })),
-          unsupported.length
-            ? h('p', { className: 'npdpx-warning' }, t('runtime.unsupported', {
-              entries: unsupported.join(', '),
-            }))
-            : null,
-          notes.length
-            ? h('ul', { className: 'npdpx-notes' },
-              notes.map((note, index) => h('li', { key: index }, safeText(localizeNote(note, t)))))
-            : null,
-          policy.experimental
-            ? h('p', { className: 'npdpx-warning' }, t('runtime.socks'))
-            : null,
-          // No action row here. "Reapply" duplicated the commit button (the Host
-          // re-reads everything on save anyway), and "Refresh status" asked the user
-          // to do something the save now does by itself. What is left is read-only.
-        )
       }
 
-      // Order is deliberate: the form ends with its commit row, and the read-only
-      // runtime details sit BELOW it, so "Save" is never buried under diagnostics.
+      // The form ends with its commit row; the compact warning list, when present,
+      // sits above the form so a refusal is visible without opening a panel.
       const body = h('div', { className: 'npdpx' },
         h('style', { 'data-notpdpton-proxy': 'styles' }, CSS),
         content,
-        runtime,
       )
       return typeof props?.Group === 'function'
         ? props.Group({
