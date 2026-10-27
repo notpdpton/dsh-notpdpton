@@ -461,6 +461,24 @@ await test('settings serialization never includes a password or transient fields
   assert.equal(sameSettings(settings, settingsOf(settings)), true)
   assert.equal(safeText('http://alice:p%40ss@host:123'), 'http://***@host:123')
 })
+await test('editing the draft drops an in-flight preview instead of caching stale text', async () => {
+  const wait = deferred()
+  const model = createSettingsModel({
+    request: async (endpoint) => {
+      if (endpoint === 'status') return { ok: true, value: status() }
+      if (endpoint === 'prompt') return wait.promise
+      throw new Error(`Unexpected endpoint ${endpoint}`)
+    },
+    credentials: store(),
+  })
+  await model.start()
+  const pending = model.previewPrompt()
+  model.patch('promptTemplate', 'changed')
+  wait.resolve({ ok: true, value: { text: 'old draft', reason: 'rendered', required: true, facts: {}, placeholders: [] } })
+  await pending
+  assert.equal(model.getSnapshot().promptPreview, null)
+  model.stop()
+})
 await test('the actual HTTP client keeps the same origin, route and envelope', async () => {
   const requests = []
   fakeFetch = async (path, init) => {
@@ -514,6 +532,18 @@ await test('layout is component-scoped and responsive without literal theme colo
   assert.match(css, /--dsw-alias-border-l2/)
   assert.match(css, /--dsw-alias-state-business-primary/)
   assert.match(css, /corner-shape: round/)
+})
+await test('template and preview share one fixed-size box', () => {
+  assert.ok(source.includes("className: 'npdpx-textarea npdpx-mono npdpx-promptBox'"))
+  assert.ok(source.includes("className: 'npdpx-promptBox npdpx-previewText'"))
+  assert.ok(source.includes('.npdpx-promptBox { height: 160px;'))
+  assert.ok(source.includes("t(promptView === 'edit' ? 'prompt.viewPreview' : 'prompt.viewEdit')"))
+})
+await test('the bypass field shows the effective list and locks inherited sources', () => {
+  assert.ok(source.includes('readOnly: !custom'))
+  assert.ok(source.includes('value: custom ? draft.noProxy : policy.noProxy'))
+  assert.ok(source.includes("t('bypass.readOnlyHint')"))
+  assert.ok(source.includes("t('bypass.effective'"))
 })
 await test('every control carries an explicit accessible name and state', () => {
   assert.match(source, /role: 'switch'/)

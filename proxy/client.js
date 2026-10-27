@@ -299,6 +299,8 @@ window.__ModuleLoader__.load({
           if (!canAct() || !KEYS.includes(key)) return
           // The preview described the previous draft, so keeping it would show stale
           // text beside edited settings — the exact confusion this feature prevents.
+          // Bumping the sequence also drops a preview that is still in flight.
+          promptSequence++
           publish({ draft: { ...state.draft, [key]: value }, errors: {}, notice: null, probe: null, promptPreview: null })
         },
         setSecret(value) {
@@ -307,6 +309,7 @@ window.__ModuleLoader__.load({
         },
         revert() {
           if (!canAct()) return
+          promptSequence++
           publish({ draft: { ...state.status.settings }, secret: '', errors: {}, probe: null, promptPreview: null,
             notice: state.credentialPending ? { tone: 'warn', key: 'auth.pending' } : null })
         },
@@ -320,6 +323,7 @@ window.__ModuleLoader__.load({
           const token = generation
           const proposed = settingsOf(state.draft)
           const secret = state.secret
+          promptSequence++
           publish({ operation: 'saving', notice: null, errors: {}, probe: null })
           try {
             // Password and settings travel in ONE request on purpose. Sending the
@@ -511,15 +515,24 @@ window.__ModuleLoader__.load({
 .npdpx-input:focus-visible, .npdpx-textarea:focus-visible { outline: none; border-color: var(--dsw-alias-state-business-primary); }
 .npdpx-input[aria-invalid="true"], .npdpx-textarea[aria-invalid="true"] { border-color: var(--dsw-alias-state-error-primary); }
 .npdpx-input:disabled, .npdpx-textarea:disabled { opacity: .5; cursor: default; }
+/* A source-owned bypass list is shown, not edited: keep it readable but visibly
+   quieter than an input the user can type into. */
+.npdpx-textarea[readonly] { background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-secondary); }
 .npdpx-mono { font-family: var(--ds-font-family-code); font-size: 12px; }
 /* ---- prompt preview and template -------------------------------------- */
 /* The preview quotes what the model receives, so it reads as quoted material:
    monospace, own surface, own scroll instead of growing the page. */
 .npdpx-promptSection { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2); }
 .npdpx-promptHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.npdpx-preview { display: flex; flex-direction: column; gap: 6px; }
 .npdpx-previewText { margin: 0; padding: 10px 12px; max-height: 220px; overflow: auto; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); font-family: var(--ds-font-family-code); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); }
-.npdpx-textAreaRow { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* Template and preview are one surface with two modes. A fixed height is what
+   keeps the form from moving when the button swaps them. */
+.npdpx-promptBox { height: 160px; min-height: 0; max-height: none; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-primary); overflow: auto; resize: none; }
+.npdpx-promptState { display: flex; flex-direction: column; gap: 6px; font-family: var(--dsw-font-family); font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.npdpx-promptActions { display: flex; flex-direction: column; gap: 8px; }
+/* Reserve two hint lines: the two hints have different lengths, and the box below
+   them must not move when the mode changes. */
+.npdpx-promptHint { min-height: 36px; }
 .npdpx-placeholders { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .npdpx-chip { padding: 2px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: transparent; font-family: var(--ds-font-family-code); font-size: 11px; line-height: 18px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .npdpx-chip:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
@@ -656,8 +669,10 @@ window.__ModuleLoader__.load({
         'ai.title': '会话提示词与 Shell',
         'ai.summaryState': '注入：{injection} · Shell：{shell}', 'ai.on': '已开启', 'ai.off': '已关闭',
         'ai.prompt': '会话提示词注入', 'ai.promptHint': '独立于代理控制：只控制是否把当前网络状态写进会话提示词。代理未生效时，注入「未接管网络」的说明。',
-        'prompt.preview': '实际注入的内容', 'prompt.refresh': '重新生成预览',
-        'prompt.previewIdle': '展开此区域后会显示当前实际注入的完整提示词。',
+        'prompt.preview': '实际注入的内容',
+        'prompt.viewPreview': '预览', 'prompt.viewEdit': '返回编辑', 'prompt.retry': '重试预览',
+        'prompt.loading': '正在生成预览…', 'prompt.previewHint': '由 Host 渲染；未注入时会在此说明原因。',
+        'prompt.previewIdle': '点击“预览”后在这里显示实际注入的完整提示词。',
         'prompt.previewDisabled': '「会话提示词注入」已关闭，因此不会注入任何内容。',
         'prompt.previewError': '无法获取预览：',
         'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
@@ -665,7 +680,7 @@ window.__ModuleLoader__.load({
         'prompt.requiredNo': '可选项（可能被精简预设忽略）',
         'prompt.template': '自定义模板', 'prompt.templateHint': '留空则使用内置文案。支持下方占位符；未知占位符会原样保留，便于发现拼写错误。',
         'prompt.templatePlaceholder': '例如：\n{{proxy}}\n这条代理只覆盖本进程…',
-        'prompt.templatePlaceholderGeneric': '例如：{{proxy}}（占位符需展开预览后才列出）',
+        'prompt.templatePlaceholderGeneric': '例如：{{proxy}}（生成预览后列出可用占位符）',
         'prompt.placeholders': '可用占位符：', 'prompt.insertHint': '点击插入到模板末尾',
         'prompt.reset': '恢复内置文案',
         'shell.label': '提供给 Shell 的代理信息', 'shell.off': '不提供', 'shell.url': '仅地址（推荐）', 'shell.full': '地址与凭据',
@@ -676,7 +691,9 @@ window.__ModuleLoader__.load({
         'advanced.overrides': '已配置分协议代理',
         'bypass.label': '绕过代理的地址', 'bypass.placeholder': 'example.com, .internal, 10.0.0.1',
         'bypass.hint': '逗号分隔。localhost、127.0.0.1、::1 自动直连。10.*、<local> 等写法不支持。',
-        'bypass.inherited': '当前来源使用自身的绕过列表；自定义绕过地址只用于自定义来源。',
+        'bypass.readOnlyHint': '当前来源使用自身的绕过列表；这里只读显示实际生效的值。',
+        'bypass.effective': '当前生效的排除列表：{list}',
+        'bypass.effectivePlaceholder': '当前生效：{list}',
         'split.title': '按目标协议指定代理（可选）',
         'split.hint': '覆盖上面的统一地址。留空沿用统一地址；这里的 HTTP / HTTPS 指目标请求类型。',
         'split.http': 'HTTP 请求使用', 'split.https': 'HTTPS 请求使用', 'split.placeholder': '留空沿用统一地址',
@@ -752,8 +769,10 @@ window.__ModuleLoader__.load({
         'ai.title': 'Session prompt & shell',
         'ai.summaryState': 'Injection: {injection} · Shell: {shell}', 'ai.on': 'on', 'ai.off': 'off',
         'ai.prompt': 'Session prompt injection', 'ai.promptHint': 'Independent of proxy control: controls only whether the current network state is written into the session prompt. When no proxy is active, it injects a note that DSH’s original routing is in force.',
-        'prompt.preview': 'What is actually injected', 'prompt.refresh': 'Regenerate preview',
-        'prompt.previewIdle': 'Expand this section to see the exact prompt text currently injected.',
+        'prompt.preview': 'What is actually injected',
+        'prompt.viewPreview': 'Preview', 'prompt.viewEdit': 'Back to editor', 'prompt.retry': 'Retry preview',
+        'prompt.loading': 'Rendering preview…', 'prompt.previewHint': 'Rendered by the Host; when nothing is injected, the box explains why.',
+        'prompt.previewIdle': 'Use Preview to see the exact text currently injected.',
         'prompt.previewDisabled': '“Session prompt injection” is off, so nothing is injected.',
         'prompt.previewError': 'Could not fetch the preview: ',
         'prompt.previewMeta': '{chars} characters; this entry is {required}.',
@@ -772,7 +791,9 @@ window.__ModuleLoader__.load({
         'advanced.overrides': 'Per-protocol proxies configured',
         'bypass.label': 'Bypass proxy for', 'bypass.placeholder': 'example.com, .internal, 10.0.0.1',
         'bypass.hint': 'Comma separated. localhost, 127.0.0.1 and ::1 bypass automatically. Patterns such as 10.* and <local> are not supported.',
-        'bypass.inherited': 'This source uses its own bypass list. Custom entries apply only to the custom source.',
+        'bypass.readOnlyHint': 'This source owns its bypass list; the value shown here is read-only.',
+        'bypass.effective': 'Effective bypass list: {list}',
+        'bypass.effectivePlaceholder': 'Effective now: {list}',
         'split.title': 'Per-target-protocol proxy (optional)',
         'split.hint': 'Override the shared address above. Blank fields use the shared address; HTTP / HTTPS refer to the target request.',
         'split.http': 'For HTTP requests', 'split.https': 'For HTTPS requests', 'split.placeholder': 'Blank uses the shared address',
@@ -911,27 +932,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /**
-     * A full-width multi-line field with a title and description, for content that
-     * needs the whole column. Separate from {@link Field} because the label belongs
-     * above an editor, not beside it.
-     */
-    function TextAreaRow({ id, title, desc, value, placeholder, rows = 4, mono, disabled, onChange }) {
-      const descId = desc ? id + '-desc' : undefined
-      return h('div', { className: 'npdpx-textAreaRow' },
-        h('label', { className: 'npdpx-label', htmlFor: id }, title),
-        desc ? h('p', { id: descId, className: 'npdpx-hint' }, desc) : null,
-        h('textarea', {
-          id,
-          rows,
-          className: 'npdpx-textarea' + (mono ? ' npdpx-mono' : ''),
-          value, placeholder, disabled, spellCheck: false,
-          'aria-describedby': descId,
-          onChange: (event) => onChange(event.target.value),
-        }),
-      )
-    }
-
     /** A boolean preference: the row title is the switch's accessible name. */
     function SwitchRow({ id, title, desc, checked, disabled, onChange }) {
       return h(Row, {
@@ -943,7 +943,7 @@ window.__ModuleLoader__.load({
     }
 
     /** A form field: 13/1.5 label, 34px input on layer-3, hint beneath. */
-    function Field({ id, label, hint, error, value, onChange, disabled, type = 'text', placeholder, textarea, mono }) {
+    function Field({ id, label, hint, error, value, onChange, disabled, type = 'text', placeholder, textarea, mono, readOnly }) {
       const hintId = hint ? id + '-hint' : undefined
       const errorId = error ? id + '-error' : undefined
       const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined
@@ -952,9 +952,10 @@ window.__ModuleLoader__.load({
         h(textarea ? 'textarea' : 'input', {
           id, type: textarea ? undefined : type, rows: textarea ? 3 : undefined,
           className: (textarea ? 'npdpx-textarea' : 'npdpx-input') + (mono ? ' npdpx-mono' : ''),
-          value, disabled, placeholder, spellCheck: false,
+          value, disabled, placeholder, spellCheck: false, readOnly,
           autoComplete: type === 'password' ? 'new-password' : 'off',
-          'aria-invalid': error ? true : undefined, 'aria-describedby': describedBy,
+          'aria-invalid': error ? true : undefined, 'aria-readonly': readOnly ? true : undefined,
+          'aria-describedby': describedBy,
           onChange: (event) => onChange(event.target.value),
         }),
         error ? h('p', { id: errorId, className: 'npdpx-error', role: 'alert' }, error) : null,
@@ -1054,6 +1055,8 @@ window.__ModuleLoader__.load({
       const [state, setState] = useState(model.getSnapshot)
       const [expanded, setExpanded] = useState({ auth: false, ai: false, advanced: false })
       const [confirmClear, setConfirmClear] = useState(false)
+      const [promptView, setPromptView] = useState('edit')
+      const [promptBusy, setPromptBusy] = useState(false)
       const formRef = useRef(null)
       useEffect(() => {
         const unsubscribe = model.subscribe(setState)
@@ -1061,16 +1064,18 @@ window.__ModuleLoader__.load({
         return () => { unsubscribe(); model.stop() }
       }, [model])
       const toggle = (key) => {
-        setExpanded((old) => {
-          const next = { ...old, [key]: !old[key] }
-          // Opening the AI section is the moment the preview becomes useful, and the
-          // model snapshot is not live-updated, so fetch it once on first open.
-          if (key === 'ai' && next.ai === true && model.getSnapshot().promptPreview === null) {
-            void model.previewPrompt()
-          }
-          return next
-        })
+        setExpanded((old) => ({ ...old, [key]: !old[key] }))
       }
+      /**
+       * The template and the preview share one box. Entering preview mode asks the
+       * Host for the current draft; editing clears the cached preview, so the effect
+       * below re-fetches when the box is shown again.
+       */
+      useEffect(() => {
+        if (promptView !== 'preview' || expanded.ai !== true || state.promptPreview !== null) return
+        setPromptBusy(true)
+        void model.previewPrompt().finally(() => setPromptBusy(false))
+      }, [promptView, expanded.ai, state.promptPreview, model])
       const save = async () => {
         await model.save()
         const errors = model.getSnapshot().errors
@@ -1146,20 +1151,31 @@ window.__ModuleLoader__.load({
           shell: t('shell.' + draft.exposeToShell),
         })
         const promptPreview = state.promptPreview
-        const promptPreviewNode = promptPreview?.error
-          ? h('p', { className: 'npdpx-error', role: 'alert' }, t('prompt.previewError'), ' ', safeText(promptPreview.error))
-          : promptPreview === null || promptPreview === undefined
-            ? h('p', { className: 'npdpx-hint' }, t('prompt.previewIdle'))
-            : promptPreview.reason !== 'rendered'
-              // Injection off is the only empty case now; an inactive proxy still has
-              // a notice, so an empty preview no longer needs a second explanation.
-              ? h('p', { className: 'npdpx-hint' }, t('prompt.previewDisabled'))
-              : h('div', { className: 'npdpx-preview' },
-                h('pre', { className: 'npdpx-previewText' }, safeText(promptPreview.text)),
-                h('p', { className: 'npdpx-hint' }, t('prompt.previewMeta', {
-                  chars: String(promptPreview.text.length),
-                  required: promptPreview.required === true ? t('prompt.requiredYes') : t('prompt.requiredNo'),
-                })))
+        const retryPreview = () => {
+          setPromptBusy(true)
+          void model.previewPrompt().finally(() => setPromptBusy(false))
+        }
+        // The preview occupies the SAME box as the template editor. Every state is
+        // rendered as that box, so switching modes never changes the form's height.
+        const promptPreviewBox = promptBusy
+          ? h('div', { className: 'npdpx-promptBox npdpx-promptState', role: 'status', 'aria-live': 'polite' }, t('prompt.loading'))
+          : promptPreview?.error
+            ? h('div', { className: 'npdpx-promptBox npdpx-promptState' },
+              h('p', { className: 'npdpx-error', role: 'alert' }, t('prompt.previewError'), ' ', safeText(promptPreview.error)),
+              h(Button, { small: true, disabled: busy, onClick: retryPreview }, t('prompt.retry')))
+            : promptPreview === null || promptPreview === undefined
+              ? h('div', { className: 'npdpx-promptBox npdpx-promptState', role: 'status' }, t('prompt.previewIdle'))
+              : promptPreview.reason !== 'rendered'
+                // Injection off is the only empty case now; an inactive proxy still
+                // has a notice, so an empty preview no longer needs a second explanation.
+                ? h('div', { className: 'npdpx-promptBox npdpx-promptState', role: 'status' }, t('prompt.previewDisabled'))
+                : h('pre', { className: 'npdpx-promptBox npdpx-previewText', 'aria-label': t('prompt.preview') }, safeText(promptPreview.text))
+        const promptPreviewMeta = promptPreview?.reason === 'rendered'
+          ? t('prompt.previewMeta', {
+            chars: String(promptPreview.text.length),
+            required: promptPreview.required === true ? t('prompt.requiredYes') : t('prompt.requiredNo'),
+          })
+          : null
 
         content = h('form', {
           ref: formRef,
@@ -1310,53 +1326,63 @@ window.__ModuleLoader__.load({
                 onChange: (value) => model.patch('exposeToShell', value),
               }),
             }),
-            // The preview is the point of the whole section: the user must be able to
-            // read the EXACT text the model receives, and to change it. Shown from the
-            // Host's own renderer, so what is displayed cannot drift from what is sent.
+            // Template and preview are two modes of ONE fixed-size box. The box is
+            // the point of the section: the user must be able to read the EXACT text
+            // the model receives, and to change it without the form moving.
             h('div', { className: 'npdpx-promptSection' },
               h('div', { className: 'npdpx-promptHead' },
-                h('p', { className: 'npdpx-label' }, t('prompt.preview')),
+                h('label', {
+                  className: 'npdpx-label',
+                  htmlFor: promptView === 'edit' ? 'npdpx-prompt-template' : undefined,
+                }, t(promptView === 'edit' ? 'prompt.template' : 'prompt.preview')),
                 h(Button, {
                   small: true,
-                  disabled: busy || state.promptPreview?.pending === true,
-                  onClick: () => model.previewPrompt(),
-                }, t('prompt.refresh'))),
-              promptPreviewNode,
-              h(TextAreaRow, {
-                id: 'npdpx-prompt-template',
-                title: t('prompt.template'),
-                desc: t('prompt.templateHint'),
-                value: draft.promptTemplate,
-                placeholder: promptPreview?.facts
-                  ? t('prompt.templatePlaceholder')
-                  : t('prompt.templatePlaceholderGeneric'),
-                rows: 6,
-                mono: true,
-                disabled: busy,
-                onChange: (value) => model.patch('promptTemplate', value),
-              }),
-              promptPreview?.placeholders?.length > 0
-                ? h('div', { className: 'npdpx-placeholders' },
-                  h('span', { className: 'npdpx-hint' }, t('prompt.placeholders')),
-                  promptPreview.placeholders.map((name) =>
-                    h('button', {
-                      key: name,
-                      type: 'button',
-                      className: 'npdpx-chip',
-                      disabled: busy,
-                      title: t('prompt.insertHint'),
-                      // Inserting a known placeholder is the whole affordance: a user
-                      // should not have to memorise the names or their spelling.
-                      onClick: () => model.patch('promptTemplate',
-                        `${draft.promptTemplate}${draft.promptTemplate === '' || draft.promptTemplate.endsWith('\n') ? '' : '\n'}{{${name}}}`),
-                    }, `{{${name}}}`)))
-                : null,
-              h('div', { className: 'npdpx-footerActions' },
-                h(Button, {
-                  small: true,
-                  disabled: busy || draft.promptTemplate === '',
-                  onClick: () => model.patch('promptTemplate', ''),
-                }, t('prompt.reset'))),
+                  disabled: busy || promptBusy,
+                  'aria-pressed': promptView === 'preview',
+                  onClick: () => setPromptView(promptView === 'preview' ? 'edit' : 'preview'),
+                }, t(promptView === 'edit' ? 'prompt.viewPreview' : 'prompt.viewEdit'))),
+              h('p', { className: 'npdpx-hint npdpx-promptHint' }, t(promptView === 'edit' ? 'prompt.templateHint' : 'prompt.previewHint')),
+              promptView === 'edit'
+                ? h('textarea', {
+                  id: 'npdpx-prompt-template',
+                  rows: 6,
+                  className: 'npdpx-textarea npdpx-mono npdpx-promptBox',
+                  value: draft.promptTemplate,
+                  placeholder: promptPreview?.facts
+                    ? t('prompt.templatePlaceholder')
+                    : t('prompt.templatePlaceholderGeneric'),
+                  disabled: busy,
+                  spellCheck: false,
+                  onChange: (event) => model.patch('promptTemplate', event.target.value),
+                })
+                : promptPreviewBox,
+              promptView === 'edit'
+                ? h('div', { className: 'npdpx-promptActions' },
+                  promptPreview?.placeholders?.length > 0
+                    ? h('div', { className: 'npdpx-placeholders' },
+                      h('span', { className: 'npdpx-hint' }, t('prompt.placeholders')),
+                      promptPreview.placeholders.map((name) =>
+                        h('button', {
+                          key: name,
+                          type: 'button',
+                          className: 'npdpx-chip',
+                          disabled: busy,
+                          title: t('prompt.insertHint'),
+                          // Inserting a known placeholder is the whole affordance: a user
+                          // should not have to memorise the names or their spelling.
+                          onClick: () => model.patch('promptTemplate',
+                            `${draft.promptTemplate}${draft.promptTemplate === '' || draft.promptTemplate.endsWith('\n') ? '' : '\n'}{{${name}}}`),
+                        }, `{{${name}}}`)))
+                    : null,
+                  h('div', { className: 'npdpx-footerActions' },
+                    h(Button, {
+                      small: true,
+                      disabled: busy || draft.promptTemplate === '',
+                      onClick: () => model.patch('promptTemplate', ''),
+                    }, t('prompt.reset'))))
+                : promptPreviewMeta
+                  ? h('p', { className: 'npdpx-hint' }, promptPreviewMeta)
+                  : null,
             ),
           ),
 
@@ -1367,20 +1393,32 @@ window.__ModuleLoader__.load({
             open: expanded.advanced,
             onToggle: () => toggle('advanced'),
           },
-            custom
-              ? h('div', { className: 'npdpx-fields' },
-                field('noProxy', t('bypass.label'), {
-                  textarea: true, mono: true,
-                  placeholder: t('bypass.placeholder'),
-                  hint: t('bypass.hint'),
-                }),
-                h('p', { className: 'npdpx-fieldLabel' }, t('split.title')),
-                h('div', { className: 'npdpx-fieldCols' },
-                  field('httpProxy', t('split.http'), { mono: true, placeholder: t('split.placeholder') }),
-                  field('httpsProxy', t('split.https'), { mono: true, placeholder: t('split.placeholder') })),
-                h('p', { className: 'npdpx-hint' }, t('split.hint')))
-              : h('div', { className: 'npdpx-fields' },
-                h('p', { className: 'npdpx-hint' }, t('bypass.inherited'))),
+            h('div', { className: 'npdpx-fields' },
+              // The bypass box always shows the value that is actually in force. A
+              // source that owns its own list (system, environment) is read-only; the
+              // custom source edits its draft directly. Under a custom draft an extra
+              // line names the live list, which always includes the loopback entries.
+              field('noProxy', t('bypass.label'), {
+                textarea: true, mono: true,
+                placeholder: custom && draft.noProxy === '' && policy.noProxy
+                  ? t('bypass.effectivePlaceholder', { list: safeText(policy.noProxy) })
+                  : t('bypass.placeholder'),
+                hint: custom ? t('bypass.hint') : t('bypass.readOnlyHint'),
+                readOnly: !custom,
+                value: custom ? draft.noProxy : policy.noProxy,
+              }),
+              custom && draft.noProxy !== '' && policy.noProxy
+                ? h('p', { className: 'npdpx-hint' }, t('bypass.effective', { list: safeText(policy.noProxy) }))
+                : null,
+              custom
+                ? h(React.Fragment, null,
+                  h('p', { className: 'npdpx-fieldLabel' }, t('split.title')),
+                  h('div', { className: 'npdpx-fieldCols' },
+                    field('httpProxy', t('split.http'), { mono: true, placeholder: t('split.placeholder') }),
+                    field('httpsProxy', t('split.https'), { mono: true, placeholder: t('split.placeholder') })),
+                  h('p', { className: 'npdpx-hint' }, t('split.hint')))
+                : null,
+            ),
             h('div', { className: 'npdpx-fields' },
               field('probeUrl', t('probe.url'), { mono: true, hint: t('probe.urlHint') })),
             h('div', { className: 'npdpx-fields' },

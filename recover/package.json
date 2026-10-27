@@ -1,6 +1,6 @@
 {
   "name": "dsh-notpdpton-recover",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "description": "会话非正常结束时，在输入框上方显示「继续」按钮。",
