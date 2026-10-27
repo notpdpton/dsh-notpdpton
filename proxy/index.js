@@ -1378,14 +1378,12 @@ export function apply(ctx) {
                   exposeToShell: draft.exposeToShell,
                   authenticated: state.authenticated,
                 })
-                const text =
-                  draft.promptInjection !== true
-                    ? ''
-                    : renderPrompt(state.policy, {
-                        exposeToShell: draft.exposeToShell,
-                        authenticated: state.authenticated,
-                        template: draft.promptTemplate,
-                      })
+                const rendered = renderPrompt(state.policy, {
+                  exposeToShell: draft.exposeToShell,
+                  authenticated: state.authenticated,
+                  template: draft.promptTemplate,
+                })
+                const text = draft.promptInjection !== true ? '' : rendered
                 reply(response, 200, {
                   ok: true,
                   value: {
@@ -1394,6 +1392,11 @@ export function apply(ctx) {
                     // preview from looking like a bug.
                     reason: draft.promptInjection !== true ? 'disabled' : 'rendered',
                     text,
+                    // The template editor shows the EFFECTIVE text even while the
+                    // injection switch is off: an empty template means "use the
+                    // built-in wording", and the box must show that wording rather
+                    // than an example placeholder. `text` still follows the switch.
+                    templateText: rendered,
                     facts,
                     placeholders: Object.keys(facts),
                     required: true,

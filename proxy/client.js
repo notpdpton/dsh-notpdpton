@@ -678,7 +678,7 @@ window.__ModuleLoader__.load({
         'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
         'prompt.requiredYes': '必需项（精简预设也不会忽略）',
         'prompt.requiredNo': '可选项（可能被精简预设忽略）',
-        'prompt.template': '自定义模板', 'prompt.templateHint': '留空则使用内置文案。支持下方占位符；未知占位符会原样保留，便于发现拼写错误。',
+        'prompt.template': '提示词模板', 'prompt.templateHint': '空模板时直接填入内置文案；编辑即成为自定义模板，清空后恢复内置。点“预览”查看展开后的文本。',
         'prompt.templatePlaceholder': '例如：\n{{proxy}}\n这条代理只覆盖本进程…',
         'prompt.templatePlaceholderGeneric': '例如：{{proxy}}（生成预览后列出可用占位符）',
         'prompt.placeholders': '可用占位符：', 'prompt.insertHint': '点击插入到模板末尾',
@@ -693,7 +693,6 @@ window.__ModuleLoader__.load({
         'bypass.hint': '逗号分隔。localhost、127.0.0.1、::1 自动直连。10.*、<local> 等写法不支持。',
         'bypass.readOnlyHint': '当前来源使用自身的绕过列表；这里只读显示实际生效的值。',
         'bypass.effective': '当前生效的排除列表：{list}',
-        'bypass.effectivePlaceholder': '当前生效：{list}',
         'split.title': '按目标协议指定代理（可选）',
         'split.hint': '覆盖上面的统一地址。留空沿用统一地址；这里的 HTTP / HTTPS 指目标请求类型。',
         'split.http': 'HTTP 请求使用', 'split.https': 'HTTPS 请求使用', 'split.placeholder': '留空沿用统一地址',
@@ -778,7 +777,7 @@ window.__ModuleLoader__.load({
         'prompt.previewMeta': '{chars} characters; this entry is {required}.',
         'prompt.requiredYes': 'required (lean presets cannot drop it)',
         'prompt.requiredNo': 'optional (lean presets may drop it)',
-        'prompt.template': 'Custom template', 'prompt.templateHint': 'Leave empty to use the built-in wording. Placeholders below are supported; unknown ones stay literal so a typo is visible.',
+        'prompt.template': 'Prompt template', 'prompt.templateHint': 'An empty template is filled with the built-in wording; editing makes it a custom template, clearing restores the built-in. Use Preview for the expanded text.',
         'prompt.templatePlaceholder': 'For example:\n{{proxy}}\nThis proxy covers this process only…',
         'prompt.templatePlaceholderGeneric': 'For example: {{proxy}} (placeholders appear after the preview loads)',
         'prompt.placeholders': 'Available placeholders:', 'prompt.insertHint': 'Insert at the end of the template',
@@ -793,7 +792,6 @@ window.__ModuleLoader__.load({
         'bypass.hint': 'Comma separated. localhost, 127.0.0.1 and ::1 bypass automatically. Patterns such as 10.* and <local> are not supported.',
         'bypass.readOnlyHint': 'This source owns its bypass list; the value shown here is read-only.',
         'bypass.effective': 'Effective bypass list: {list}',
-        'bypass.effectivePlaceholder': 'Effective now: {list}',
         'split.title': 'Per-target-protocol proxy (optional)',
         'split.hint': 'Override the shared address above. Blank fields use the shared address; HTTP / HTTPS refer to the target request.',
         'split.http': 'For HTTP requests', 'split.https': 'For HTTPS requests', 'split.placeholder': 'Blank uses the shared address',
@@ -1067,15 +1065,18 @@ window.__ModuleLoader__.load({
         setExpanded((old) => ({ ...old, [key]: !old[key] }))
       }
       /**
-       * The template and the preview share one box. Entering preview mode asks the
-       * Host for the current draft; editing clears the cached preview, so the effect
-       * below re-fetches when the box is shown again.
+       * The template and the preview share one box. The template box shows the
+       * EFFECTIVE text, so an empty template needs the Host's built-in rendering
+       * even before the user switches to preview. Editing clears the cached
+       * preview; this effect re-fetches when the box needs text again.
        */
       useEffect(() => {
-        if (promptView !== 'preview' || expanded.ai !== true || state.promptPreview !== null) return
+        if (expanded.ai !== true || state.promptPreview !== null) return
+        const needsTemplate = state.draft?.promptTemplate === ''
+        if (promptView !== 'preview' && !needsTemplate) return
         setPromptBusy(true)
         void model.previewPrompt().finally(() => setPromptBusy(false))
-      }, [promptView, expanded.ai, state.promptPreview, model])
+      }, [promptView, expanded.ai, state.promptPreview, state.draft?.promptTemplate, model])
       const save = async () => {
         await model.save()
         const errors = model.getSnapshot().errors
@@ -1151,6 +1152,12 @@ window.__ModuleLoader__.load({
           shell: t('shell.' + draft.exposeToShell),
         })
         const promptPreview = state.promptPreview
+        // An empty template means "use the built-in wording". The box must show that
+        // wording, not an example placeholder, so the Host's rendered text stands in
+        // for the empty draft until the user edits it.
+        const templateValue = draft.promptTemplate !== ''
+          ? draft.promptTemplate
+          : (typeof promptPreview?.templateText === 'string' ? promptPreview.templateText : '')
         const retryPreview = () => {
           setPromptBusy(true)
           void model.previewPrompt().finally(() => setPromptBusy(false))
@@ -1347,7 +1354,7 @@ window.__ModuleLoader__.load({
                   id: 'npdpx-prompt-template',
                   rows: 6,
                   className: 'npdpx-textarea npdpx-mono npdpx-promptBox',
-                  value: draft.promptTemplate,
+                  value: templateValue,
                   placeholder: promptPreview?.facts
                     ? t('prompt.templatePlaceholder')
                     : t('prompt.templatePlaceholderGeneric'),
@@ -1371,7 +1378,7 @@ window.__ModuleLoader__.load({
                           // Inserting a known placeholder is the whole affordance: a user
                           // should not have to memorise the names or their spelling.
                           onClick: () => model.patch('promptTemplate',
-                            `${draft.promptTemplate}${draft.promptTemplate === '' || draft.promptTemplate.endsWith('\n') ? '' : '\n'}{{${name}}}`),
+                            `${templateValue}${templateValue === '' || templateValue.endsWith('\n') ? '' : '\n'}{{${name}}}`),
                         }, `{{${name}}}`)))
                     : null,
                   h('div', { className: 'npdpx-footerActions' },
@@ -1400,12 +1407,12 @@ window.__ModuleLoader__.load({
               // line names the live list, which always includes the loopback entries.
               field('noProxy', t('bypass.label'), {
                 textarea: true, mono: true,
-                placeholder: custom && draft.noProxy === '' && policy.noProxy
-                  ? t('bypass.effectivePlaceholder', { list: safeText(policy.noProxy) })
-                  : t('bypass.placeholder'),
+                placeholder: t('bypass.placeholder'),
                 hint: custom ? t('bypass.hint') : t('bypass.readOnlyHint'),
                 readOnly: !custom,
-                value: custom ? draft.noProxy : policy.noProxy,
+                // An empty custom list means the built-in rules are what is in force;
+                // show them rather than an empty box with a placeholder.
+                value: custom ? (draft.noProxy || policy.noProxy) : policy.noProxy,
               }),
               custom && draft.noProxy !== '' && policy.noProxy
                 ? h('p', { className: 'npdpx-hint' }, t('bypass.effective', { list: safeText(policy.noProxy) }))
