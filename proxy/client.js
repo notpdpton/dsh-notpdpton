@@ -678,11 +678,11 @@ window.__ModuleLoader__.load({
         'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
         'prompt.requiredYes': '必需项（精简预设也不会忽略）',
         'prompt.requiredNo': '可选项（可能被精简预设忽略）',
-        'prompt.template': '提示词模板', 'prompt.templateHint': '空模板时直接填入内置文案；编辑即成为自定义模板，清空后恢复内置。点“预览”查看展开后的文本。',
+        'prompt.template': '提示词模板', 'prompt.templateHint': '空模板时填入带占位符的初始模板；编辑后即成为自定义模板。点“预览”查看展开后的实际文本。',
         'prompt.templatePlaceholder': '例如：\n{{proxy}}\n这条代理只覆盖本进程…',
         'prompt.templatePlaceholderGeneric': '例如：{{proxy}}（生成预览后列出可用占位符）',
         'prompt.placeholders': '可用占位符：', 'prompt.insertHint': '点击插入到模板末尾',
-        'prompt.reset': '恢复内置文案',
+        'prompt.reset': '恢复初始模板',
         'shell.label': '提供给 Shell 的代理信息', 'shell.off': '不提供', 'shell.url': '仅地址（推荐）', 'shell.full': '地址与凭据',
         'shell.offHint': '命令环境不提供代理信息；上面的提示词开关独立生效。',
         'shell.urlHint': '命令按需显式使用代理地址。代理要求认证时，命令可能收到 407（代理需要认证）。',
@@ -777,11 +777,11 @@ window.__ModuleLoader__.load({
         'prompt.previewMeta': '{chars} characters; this entry is {required}.',
         'prompt.requiredYes': 'required (lean presets cannot drop it)',
         'prompt.requiredNo': 'optional (lean presets may drop it)',
-        'prompt.template': 'Prompt template', 'prompt.templateHint': 'An empty template is filled with the built-in wording; editing makes it a custom template, clearing restores the built-in. Use Preview for the expanded text.',
+        'prompt.template': 'Prompt template', 'prompt.templateHint': 'An empty template is filled with a starter template containing placeholders; editing makes it a custom template. Use Preview for the expanded text.',
         'prompt.templatePlaceholder': 'For example:\n{{proxy}}\nThis proxy covers this process only…',
         'prompt.templatePlaceholderGeneric': 'For example: {{proxy}} (placeholders appear after the preview loads)',
         'prompt.placeholders': 'Available placeholders:', 'prompt.insertHint': 'Insert at the end of the template',
-        'prompt.reset': 'Restore built-in wording',
+        'prompt.reset': 'Restore starter template',
         'shell.label': 'Proxy information supplied to shells', 'shell.off': 'None', 'shell.url': 'Address only (recommended)', 'shell.full': 'Address and credentials',
         'shell.offHint': 'Do not supply proxy information to command environments. The prompt switch above is independent.',
         'shell.urlHint': 'Commands opt in using the address. An authenticated proxy may return 407 (proxy authentication required).',
@@ -1152,12 +1152,12 @@ window.__ModuleLoader__.load({
           shell: t('shell.' + draft.exposeToShell),
         })
         const promptPreview = state.promptPreview
-        // An empty template means "use the built-in wording". The box must show that
-        // wording, not an example placeholder, so the Host's rendered text stands in
-        // for the empty draft until the user edits it.
+        // An empty saved template still means "use the built-in wording", but the
+        // editor opens on the Host's starter template so the placeholders are visible
+        // and editable instead of an empty box with an example placeholder.
         const templateValue = draft.promptTemplate !== ''
           ? draft.promptTemplate
-          : (typeof promptPreview?.templateText === 'string' ? promptPreview.templateText : '')
+          : (typeof promptPreview?.templateSeed === 'string' ? promptPreview.templateSeed : '')
         const retryPreview = () => {
           setPromptBusy(true)
           void model.previewPrompt().finally(() => setPromptBusy(false))

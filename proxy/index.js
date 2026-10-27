@@ -131,6 +131,25 @@ export const DEFAULT_SETTINGS = {
 }
 
 /**
+ * Starter template shown in the editor when the saved template is empty.
+ *
+ * This is NOT the built-in rendering: an empty `promptTemplate` still means "use the
+ * built-in wording", because only that can reflect the live policy. The starter
+ * exists so the editor opens with the placeholders visible and editable instead of
+ * an empty box with an example placeholder. It references only facts from
+ * {@link promptFacts}, so rendering it can never invent proxy state.
+ */
+export const DEFAULT_TEMPLATE = [
+  'Network proxy',
+  '- This Harness process sends its outbound HTTP(S) traffic through {{proxy}} (source: {{source}}).',
+  '- These hosts are contacted directly instead: {{bypass}}.',
+  '{{shell}}',
+  '{{state}}',
+  '{{auth}}',
+  '{{settings}}',
+].join('\n')
+
+/**
  * Schemes recognised well enough to explain why they are refused, rather than
  * reported as a malformed URL.
  */
@@ -1378,12 +1397,14 @@ export function apply(ctx) {
                   exposeToShell: draft.exposeToShell,
                   authenticated: state.authenticated,
                 })
-                const rendered = renderPrompt(state.policy, {
-                  exposeToShell: draft.exposeToShell,
-                  authenticated: state.authenticated,
-                  template: draft.promptTemplate,
-                })
-                const text = draft.promptInjection !== true ? '' : rendered
+                const text =
+                  draft.promptInjection !== true
+                    ? ''
+                    : renderPrompt(state.policy, {
+                        exposeToShell: draft.exposeToShell,
+                        authenticated: state.authenticated,
+                        template: draft.promptTemplate,
+                      })
                 reply(response, 200, {
                   ok: true,
                   value: {
@@ -1392,11 +1413,10 @@ export function apply(ctx) {
                     // preview from looking like a bug.
                     reason: draft.promptInjection !== true ? 'disabled' : 'rendered',
                     text,
-                    // The template editor shows the EFFECTIVE text even while the
-                    // injection switch is off: an empty template means "use the
-                    // built-in wording", and the box must show that wording rather
-                    // than an example placeholder. `text` still follows the switch.
-                    templateText: rendered,
+                    // The editor opens on a real starter template instead of an empty
+                    // box, and the starter is the same regardless of the injection
+                    // switch. `text` remains the expanded preview and still follows it.
+                    templateSeed: DEFAULT_TEMPLATE,
                     facts,
                     placeholders: Object.keys(facts),
                     required: true,

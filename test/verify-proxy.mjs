@@ -288,6 +288,10 @@ check(
   Object.keys(facts).every((name) => !host.renderPrompt(credentialed, { template: `{{${name}}}` }).includes('{{')),
   Object.keys(facts).join(','),
 )
+const seedNames = [...host.DEFAULT_TEMPLATE.matchAll(/\{\{(\w+)\}\}/g)].map((match) => match[1])
+check('the starter template uses every known fact', Object.keys(facts).every((name) => seedNames.includes(name)), seedNames.join(','))
+check('the starter template has no unknown placeholder', seedNames.every((name) => name in facts), seedNames.join(','))
+check('the starter template is not the built-in rendering', host.DEFAULT_TEMPLATE !== host.renderPrompt(credentialed, { exposeToShell: 'url', authenticated: true }))
 
 // ---------------------------------------------------------------- install env
 

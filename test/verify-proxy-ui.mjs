@@ -539,6 +539,7 @@ await test('template and preview share one fixed-size box', () => {
   assert.ok(source.includes('.npdpx-promptBox { height: 160px;'))
   assert.ok(source.includes("t(promptView === 'edit' ? 'prompt.viewPreview' : 'prompt.viewEdit')"))
   assert.ok(source.includes('value: templateValue'))
+  assert.ok(source.includes('promptPreview?.templateSeed'))
 })
 await test('the bypass field shows the effective list and locks inherited sources', () => {
   assert.ok(source.includes('readOnly: !custom'))
