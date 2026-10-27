@@ -533,10 +533,6 @@ window.__ModuleLoader__.load({
 /* Reserve two hint lines: the two hints have different lengths, and the box below
    them must not move when the mode changes. */
 .npdpx-promptHint { min-height: 36px; }
-.npdpx-placeholders { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.npdpx-chip { padding: 2px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: transparent; font-family: var(--ds-font-family-code); font-size: 11px; line-height: 18px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
-.npdpx-chip:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
-.npdpx-chip:disabled { opacity: .5; cursor: default; }
 .npdpx-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }
 .npdpx-error { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
 .npdpx-warning { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-state-warn-label); overflow-wrap: anywhere; }
@@ -680,8 +676,7 @@ window.__ModuleLoader__.load({
         'prompt.requiredNo': '可选项（可能被精简预设忽略）',
         'prompt.template': '提示词模板', 'prompt.templateHint': '空模板时填入带占位符的初始模板；编辑后即成为自定义模板。点“预览”查看展开后的实际文本。',
         'prompt.templatePlaceholder': '例如：\n{{proxy}}\n这条代理只覆盖本进程…',
-        'prompt.templatePlaceholderGeneric': '例如：{{proxy}}（生成预览后列出可用占位符）',
-        'prompt.placeholders': '可用占位符：', 'prompt.insertHint': '点击插入到模板末尾',
+        'prompt.templatePlaceholderGeneric': '例如：{{proxy}}',
         'prompt.reset': '恢复初始模板',
         'shell.label': '提供给 Shell 的代理信息', 'shell.off': '不提供', 'shell.url': '仅地址（推荐）', 'shell.full': '地址与凭据',
         'shell.offHint': '命令环境不提供代理信息；上面的提示词开关独立生效。',
@@ -779,8 +774,7 @@ window.__ModuleLoader__.load({
         'prompt.requiredNo': 'optional (lean presets may drop it)',
         'prompt.template': 'Prompt template', 'prompt.templateHint': 'An empty template is filled with a starter template containing placeholders; editing makes it a custom template. Use Preview for the expanded text.',
         'prompt.templatePlaceholder': 'For example:\n{{proxy}}\nThis proxy covers this process only…',
-        'prompt.templatePlaceholderGeneric': 'For example: {{proxy}} (placeholders appear after the preview loads)',
-        'prompt.placeholders': 'Available placeholders:', 'prompt.insertHint': 'Insert at the end of the template',
+        'prompt.templatePlaceholderGeneric': 'For example: {{proxy}}',
         'prompt.reset': 'Restore starter template',
         'shell.label': 'Proxy information supplied to shells', 'shell.off': 'None', 'shell.url': 'Address only (recommended)', 'shell.full': 'Address and credentials',
         'shell.offHint': 'Do not supply proxy information to command environments. The prompt switch above is independent.',
@@ -1365,22 +1359,6 @@ window.__ModuleLoader__.load({
                 : promptPreviewBox,
               promptView === 'edit'
                 ? h('div', { className: 'npdpx-promptActions' },
-                  promptPreview?.placeholders?.length > 0
-                    ? h('div', { className: 'npdpx-placeholders' },
-                      h('span', { className: 'npdpx-hint' }, t('prompt.placeholders')),
-                      promptPreview.placeholders.map((name) =>
-                        h('button', {
-                          key: name,
-                          type: 'button',
-                          className: 'npdpx-chip',
-                          disabled: busy,
-                          title: t('prompt.insertHint'),
-                          // Inserting a known placeholder is the whole affordance: a user
-                          // should not have to memorise the names or their spelling.
-                          onClick: () => model.patch('promptTemplate',
-                            `${templateValue}${templateValue === '' || templateValue.endsWith('\n') ? '' : '\n'}{{${name}}}`),
-                        }, `{{${name}}}`)))
-                    : null,
                   h('div', { className: 'npdpx-footerActions' },
                     h(Button, {
                       small: true,
