@@ -35,7 +35,7 @@ window.__ModuleLoader__.load({
      * settings page.
      */
     const PACKAGE_ID = 'dsh-notpdpton'
-    const PACKAGE_VERSION = '1.1.8'
+    const PACKAGE_VERSION = '1.1.9'
     /** Projection key registered by this plugin's Host half. */
     const PROJECTION_KEY = 'interruption'
     /** Dock cell id; a fresh id adds an entry beside the shipped todo/goal/queue docks. */

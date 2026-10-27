@@ -638,7 +638,7 @@ window.__ModuleLoader__.load({
     const LOCALE_DICTS = {
       zh: {
         'group.title': '网络代理', 'group.desc': '管理 DSH 的网络连接，不修改系统代理。',
-        'enable.label': '启用代理', 'enable.hint': '只控制 DSH 自身请求是否走代理。下方的会话提示词注入是独立开关，互不影响。',
+        'enable.label': '启用代理', 'enable.hint': '只控制 DSH 自身请求是否走代理。下方的“启用注入”是独立开关，互不影响。',
         'applied.label': '当前生效', 'state.off': '未启用', 'state.proxied': '代理已启用',
         'state.direct': '强制直连', 'state.none': '未找到可用代理', 'state.error': '应用异常',
         'state.inherited': '未接管原有网络设置', 'state.pending': '未保存',
@@ -669,13 +669,13 @@ window.__ModuleLoader__.load({
         'auth.pending': '凭据库已更新，代理配置尚未应用；请点击“保存并应用”。',
         'auth.partial': '密码已写入凭据库，但代理配置未应用成功。请重试保存。',
         'ai.title': '会话提示词与 Shell',
-        'ai.summaryState': '注入：{injection} · Shell：{shell}', 'ai.on': '已开启', 'ai.off': '已关闭',
-        'ai.prompt': '会话提示词注入', 'ai.promptHint': '独立于代理控制：只控制是否把当前网络状态写进会话提示词。代理未生效时，注入「未接管网络」的说明。',
+        'ai.summaryShell': '模板 · Shell：{shell}',
+        'ai.prompt': '启用注入', 'ai.promptHint': '独立于代理控制：只控制是否把当前网络状态写进会话提示词。代理未生效时，注入「未接管网络」的说明。',
         'prompt.preview': '实际注入的内容',
         'prompt.viewPreview': '预览', 'prompt.viewEdit': '返回编辑', 'prompt.retry': '重试预览',
         'prompt.loading': '正在生成预览…', 'prompt.previewHint': '由 Host 渲染；未注入时会在此说明原因。',
         'prompt.previewIdle': '点击“预览”后在这里显示实际注入的完整提示词。',
-        'prompt.previewDisabled': '「会话提示词注入」已关闭，因此不会注入任何内容。',
+        'prompt.previewDisabled': '「启用注入」已关闭，因此不会注入任何内容。',
         'prompt.previewError': '无法获取预览：',
         'prompt.previewMeta': '共 {chars} 个字符；此条目为{required}。',
         'prompt.requiredYes': '必需项（精简预设也不会忽略）',
@@ -737,7 +737,7 @@ window.__ModuleLoader__.load({
       },
       en: {
         'group.title': 'Network proxy', 'group.desc': 'Manage DSH connections without changing the system proxy.',
-        'enable.label': 'Enable proxy', 'enable.hint': 'Controls only whether DSH’s own requests use the proxy. Session prompt injection below is an independent switch.',
+        'enable.label': 'Enable proxy', 'enable.hint': 'Controls only whether DSH’s own requests use the proxy. “Enable injection” below is an independent switch.',
         'applied.label': 'Applied now', 'state.off': 'Off', 'state.proxied': 'Proxy active',
         'state.direct': 'Forced direct', 'state.none': 'No proxy found', 'state.error': 'Application error',
         'state.inherited': 'Original network settings retained', 'state.pending': 'Unsaved',
@@ -768,13 +768,13 @@ window.__ModuleLoader__.load({
         'auth.pending': 'The credential store changed, but routing has not been reapplied. Use Save & apply.',
         'auth.partial': 'The password was stored, but the proxy settings could not be applied. Retry saving.',
         'ai.title': 'Session prompt & shell',
-        'ai.summaryState': 'Injection: {injection} · Shell: {shell}', 'ai.on': 'on', 'ai.off': 'off',
-        'ai.prompt': 'Session prompt injection', 'ai.promptHint': 'Independent of proxy control: controls only whether the current network state is written into the session prompt. When no proxy is active, it injects a note that DSH’s original routing is in force.',
+        'ai.summaryShell': 'Template · Shell: {shell}',
+        'ai.prompt': 'Enable injection', 'ai.promptHint': 'Independent of proxy control: controls only whether the current network state is written into the session prompt. When no proxy is active, it injects a note that DSH’s original routing is in force.',
         'prompt.preview': 'What is actually injected',
         'prompt.viewPreview': 'Preview', 'prompt.viewEdit': 'Back to editor', 'prompt.retry': 'Retry preview',
         'prompt.loading': 'Rendering preview…', 'prompt.previewHint': 'Rendered by the Host; when nothing is injected, the box explains why.',
         'prompt.previewIdle': 'Use Preview to see the exact text currently injected.',
-        'prompt.previewDisabled': '“Session prompt injection” is off, so nothing is injected.',
+        'prompt.previewDisabled': '“Enable injection” is off, so nothing is injected.',
         'prompt.previewError': 'Could not fetch the preview: ',
         'prompt.previewMeta': '{chars} characters; this entry is {required}.',
         'prompt.requiredYes': 'required (lean presets cannot drop it)',
@@ -1149,10 +1149,7 @@ window.__ModuleLoader__.load({
         const resultGood = result?.ok === true && result.status >= 200 && result.status < 400
         const sourceOptions = MODES.map((mode) => ({ value: mode.value, label: t(mode.label) }))
         const shellOptions = SHELL_EXPOSURES.map((option) => ({ value: option.value, label: t(option.label) }))
-        const aiSummary = t('ai.summaryState', {
-          injection: draft.promptInjection ? t('ai.on') : t('ai.off'),
-          shell: t('shell.' + draft.exposeToShell),
-        })
+        const aiSummary = t('ai.summaryShell', { shell: t('shell.' + draft.exposeToShell) })
         const promptPreview = state.promptPreview
         // Editing the template clears the preview, but the shortcut chips must stay.
         // The status snapshot carries the applied facts/placeholder list; a live
@@ -1231,6 +1228,14 @@ window.__ModuleLoader__.load({
               checked: draft.enabled,
               disabled: busy,
               onChange: (value) => model.patch('enabled', value),
+            }),
+            h(SwitchRow, {
+              id: 'npdpx-prompt',
+              title: t('ai.prompt'),
+              desc: t('ai.promptHint'),
+              checked: draft.promptInjection,
+              disabled: busy,
+              onChange: (value) => model.patch('promptInjection', value),
             }),
             // The source row OWNS whatever details follow it — the address field for
             // auto/custom, the status panel for system/env — so it declares itself
@@ -1331,14 +1336,6 @@ window.__ModuleLoader__.load({
             open: expanded.ai,
             onToggle: () => toggle('ai'),
           },
-            h(SwitchRow, {
-              id: 'npdpx-prompt',
-              title: t('ai.prompt'),
-              desc: t('ai.promptHint'),
-              checked: draft.promptInjection,
-              disabled: busy,
-              onChange: (value) => model.patch('promptInjection', value),
-            }),
             h(Row, {
               id: 'npdpx-shell',
               title: t('shell.label'),

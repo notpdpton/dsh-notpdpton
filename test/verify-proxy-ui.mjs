@@ -560,6 +560,14 @@ await test('template and preview share one fixed-size box', () => {
   assert.ok(source.includes("t('prompt.emptyValue')"))
   assert.ok(source.includes('title: chipTitle(name)'))
 })
+await test('the injection switch sits directly under the proxy switch', () => {
+  const enabled = source.indexOf("id: 'npdpx-enabled'")
+  const prompt = source.indexOf("id: 'npdpx-prompt'")
+  const sourceRow = source.indexOf("id: 'npdpx-source'")
+  assert.ok(enabled >= 0 && prompt > enabled && prompt < sourceRow, `${enabled},${prompt},${sourceRow}`)
+  assert.equal(dictionaries.zh['ai.prompt'], '启用注入')
+  assert.equal(dictionaries.en['ai.prompt'], 'Enable injection')
+})
 await test('the bypass field shows the effective list and locks inherited sources', () => {
   assert.ok(source.includes('readOnly: !custom'))
   assert.ok(source.includes('value: custom ? (draft.noProxy || policy.noProxy) : policy.noProxy'))
